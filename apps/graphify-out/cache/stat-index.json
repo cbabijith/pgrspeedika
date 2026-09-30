@@ -287,9 +287,8 @@
   },
   "web/public/icon.svg": {
     "size": 445,
-    "mtime_ns": 1790797487949296408,
-    "indexed_at_ns": 1790797508549280000,
-    "word_count": 55,
+    "mtime_ns": 1790797532076209358,
+    "indexed_at_ns": 1790797583087877000,
     "hashes": { "web/public/icon.svg": "6c8df9ebc7e5d83eefeba8ab45de0dff4bd428f989682d1829885957df3a148d" }
   },
   "web/public/sw.js": {

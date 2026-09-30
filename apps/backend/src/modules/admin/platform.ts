@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
+import { z } from "zod";
 import {
   shopSettingsSchema,
   slotInputSchema,
@@ -173,27 +174,33 @@ export function adminPlatformRoutes(ctx: AppContext) {
           .orderBy(desc(orders.placedAt));
         return c.json(ok(rows));
       })
-      .post("/customers/:id/block", requireStaff(ctx, "customers:manage"), async (c) => {
-        const id = c.req.param("id");
-        const staff = c.get("user");
-        const body = await c.req.raw.json().catch(() => ({}));
-        const banned = Boolean((body as { banned?: boolean }).banned ?? true);
-        const [row] = await ctx.db
-          .update(user)
-          .set({ banned, banReason: banned ? "Blocked by shop" : null, updatedAt: new Date() })
-          .where(eq(user.id, id))
-          .returning({ id: user.id, banned: user.banned });
-        if (!row) throw notFound("Customer not found");
-        await writeAudit(ctx.db, {
-          actor: staff,
-          action: banned ? "customer.blocked" : "customer.unblocked",
-          entityType: "user",
-          entityId: id,
-        });
-        return c.json(ok(row));
-      })
-
-      // ── Staff & roles ───────────────────────────────────────────────────────
+      .post(
+        "/customers/:id/block",
+        requireStaff(ctx, "customers:manage"),
+        zValidator("json", z.object({ banned: z.boolean().optional() }), (result, c) => {
+          if (!result.success)
+            return c.json({ ok: false as const, code: "VALIDATION_ERROR", message: "Invalid body" }, 400);
+        }),
+        async (c) => {
+          const id = c.req.param("id");
+          const staff = c.get("user");
+          const body = c.req.valid("json") as { banned?: boolean };
+          const banned = Boolean((body as { banned?: boolean }).banned ?? true);
+          const [row] = await ctx.db
+            .update(user)
+            .set({ banned, banReason: banned ? "Blocked by shop" : null, updatedAt: new Date() })
+            .where(eq(user.id, id))
+            .returning({ id: user.id, banned: user.banned });
+          if (!row) throw notFound("Customer not found");
+          await writeAudit(ctx.db, {
+            actor: staff,
+            action: banned ? "customer.blocked" : "customer.unblocked",
+            entityType: "user",
+            entityId: id,
+          });
+          return c.json(ok(row));
+        },
+      )
       .get("/staff", requireStaff(ctx, "staff:manage"), async (c) => {
         const rows = await ctx.db
           .select({

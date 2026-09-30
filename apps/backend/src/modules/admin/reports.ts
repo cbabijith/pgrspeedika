@@ -1,5 +1,7 @@
 import { newHono } from "../../lib/hono";
+import { zValidator } from "@hono/zod-validator";
 import { and, eq, sql } from "drizzle-orm";
+import { z } from "zod";
 import { deliverySlots, inventory, orderItems, orders, products, slotBookings, user } from "@pgrs/db";
 import type { AppContext } from "../../lib/app-context";
 import { ok } from "../../lib/errors";
@@ -100,126 +102,152 @@ export function adminReportRoutes(ctx: AppContext) {
 
       /** Reports: sales by day / product / category, GST summary, payment split,
        *  top customers. `?format=csv` streams a CSV export. */
-      .get("/reports/:kind", requireStaff(ctx, "reports:view"), async (c) => {
-        const kind = c.req.param("kind");
-        const from = c.req.query("from") ?? new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
-        const to = c.req.query("to") ?? new Date().toISOString().slice(0, 10);
-        const asCsv = c.req.query("format") === "csv";
-        const fromTs = new Date(`${from}T00:00:00+05:30`);
-        const toTs = new Date(`${to}T23:59:59+05:30`);
+      .get(
+        "/reports/:kind",
+        requireStaff(ctx, "reports:view"),
+        zValidator(
+          "query",
+          z.object({
+            from: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .optional(),
+            to: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .optional(),
+            format: z.enum(["csv", "json"]).optional(),
+          }),
+          (result, c) => {
+            if (!result.success)
+              return c.json({ ok: false as const, code: "VALIDATION_ERROR", message: "Invalid range" }, 400);
+          },
+        ),
+        async (c) => {
+          const kind = c.req.param("kind");
+          const query = c.req.valid("query");
+          const from = query.from ?? new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+          const to = query.to ?? new Date().toISOString().slice(0, 10);
+          const asCsv = query.format === "csv";
+          const fromTs = new Date(`${from}T00:00:00+05:30`);
+          const toTs = new Date(`${to}T23:59:59+05:30`);
 
-        let rows: Array<Record<string, string | number>> = [];
-        if (kind === "sales-by-day") {
-          const data = await ctx.db
-            .select({
-              date: sql<string>`to_char(${orders.placedAt}, 'YYYY-MM-DD')`,
-              orders: sql<number>`count(*)::int`,
-              revenuePaise: sql<number>`coalesce(sum(coalesce(${orders.finalGrandTotalPaise}, ${orders.grandTotalPaise})) filter (where ${orders.status} <> 'cancelled'), 0)::int`,
-              deliveredPaise: sql<number>`coalesce(sum(coalesce(${orders.finalGrandTotalPaise}, ${orders.grandTotalPaise})) filter (where ${orders.status} = 'delivered'), 0)::int`,
-            })
-            .from(orders)
-            .where(and(sql`${orders.placedAt} >= ${fromTs}`, sql`${orders.placedAt} <= ${toTs}`))
-            .groupBy(sql`to_char(${orders.placedAt}, 'YYYY-MM-DD')`)
-            .orderBy(sql`to_char(${orders.placedAt}, 'YYYY-MM-DD')`);
-          rows = data;
-        } else if (kind === "sales-by-product") {
-          const data = await ctx.db
-            .select({
-              product: orderItems.nameEn,
-              quantitySold: sql<number>`sum(${orderItems.quantity})::int`,
-              revenuePaise: sql<number>`coalesce(sum(coalesce(${orderItems.finalLineTotalPaise}, ${orderItems.lineTotalPaise})), 0)::int`,
-            })
-            .from(orderItems)
-            .innerJoin(orders, eq(orderItems.orderId, orders.id))
-            .where(
-              and(
-                sql`${orders.placedAt} >= ${fromTs}`,
-                sql`${orders.placedAt} <= ${toTs}`,
-                sql`${orders.status} <> 'cancelled'`,
-              ),
-            )
-            .groupBy(orderItems.nameEn)
-            .orderBy(sql`2 desc`);
-          rows = data;
-        } else if (kind === "sales-by-category") {
-          const data = await ctx.db
-            .select({
-              category: sql<string>`c.name_en`,
-              revenuePaise: sql<number>`coalesce(sum(coalesce(${orderItems.finalLineTotalPaise}, ${orderItems.lineTotalPaise})), 0)::int`,
-            })
-            .from(orderItems)
-            .innerJoin(orders, eq(orderItems.orderId, orders.id))
-            .innerJoin(products, eq(orderItems.productId, products.id))
-            .innerJoin(sql`categories c`, sql`c.id = ${products.categoryId}`)
-            .where(and(sql`${orders.placedAt} >= ${fromTs}`, sql`${orders.status} <> 'cancelled'`))
-            .groupBy(sql`c.name_en`)
-            .orderBy(sql`2 desc`);
-          rows = data;
-        } else if (kind === "gst-summary") {
-          const data = await ctx.db
-            .select({
-              gstRate: orderItems.gstRate,
-              taxableValuePaise: sql<number>`coalesce(sum(coalesce(${orderItems.finalLineTotalPaise}, ${orderItems.lineTotalPaise})) filter (where ${orders.status} <> 'cancelled'), 0)::int`,
-            })
-            .from(orderItems)
-            .innerJoin(orders, eq(orderItems.orderId, orders.id))
-            .where(and(sql`${orders.placedAt} >= ${fromTs}`, sql`${orders.placedAt} <= ${toTs}`))
-            .groupBy(orderItems.gstRate)
-            .orderBy(orderItems.gstRate);
-          rows = data.map((r) => ({
-            gstRate: r.gstRate,
-            taxableValuePaise: r.taxableValuePaise,
-            taxPaise: Math.round((r.taxableValuePaise * r.gstRate) / (100 + r.gstRate)),
-          }));
-        } else if (kind === "payment-split") {
-          const data = await ctx.db
-            .select({
-              paymentMethod: orders.paymentMethod,
-              paymentStatus: orders.paymentStatus,
-              orders: sql<number>`count(*)::int`,
-              revenuePaise: sql<number>`coalesce(sum(coalesce(${orders.finalGrandTotalPaise}, ${orders.grandTotalPaise})), 0)::int`,
-            })
-            .from(orders)
-            .where(and(sql`${orders.placedAt} >= ${fromTs}`, sql`${orders.placedAt} <= ${toTs}`))
-            .groupBy(orders.paymentMethod, orders.paymentStatus);
-          rows = data;
-        } else if (kind === "top-customers") {
-          const data = await ctx.db
-            .select({
-              customer: sql<string>`coalesce(u.name, 'Guest')`,
-              phone: sql<string>`coalesce(u.phone_number, '')`,
-              orders: sql<number>`count(*)::int`,
-              spentPaise: sql<number>`coalesce(sum(coalesce(${orders.finalGrandTotalPaise}, ${orders.grandTotalPaise})), 0)::int`,
-            })
-            .from(orders)
-            .leftJoin(sql`"user" u`, sql`u.id = ${orders.userId}`)
-            .where(and(sql`${orders.placedAt} >= ${fromTs}`, sql`${orders.status} = 'delivered'`))
-            .groupBy(sql`u.name, u.phone_number`)
-            .orderBy(sql`4 desc`)
-            .limit(50);
-          rows = data;
-        } else {
-          return c.json({ ok: false as const, code: "NOT_FOUND", message: `Unknown report "${kind}"` }, 404);
-        }
+          let rows: Array<Record<string, string | number>> = [];
+          if (kind === "sales-by-day") {
+            const data = await ctx.db
+              .select({
+                date: sql<string>`to_char(${orders.placedAt}, 'YYYY-MM-DD')`,
+                orders: sql<number>`count(*)::int`,
+                revenuePaise: sql<number>`coalesce(sum(coalesce(${orders.finalGrandTotalPaise}, ${orders.grandTotalPaise})) filter (where ${orders.status} <> 'cancelled'), 0)::int`,
+                deliveredPaise: sql<number>`coalesce(sum(coalesce(${orders.finalGrandTotalPaise}, ${orders.grandTotalPaise})) filter (where ${orders.status} = 'delivered'), 0)::int`,
+              })
+              .from(orders)
+              .where(and(sql`${orders.placedAt} >= ${fromTs}`, sql`${orders.placedAt} <= ${toTs}`))
+              .groupBy(sql`to_char(${orders.placedAt}, 'YYYY-MM-DD')`)
+              .orderBy(sql`to_char(${orders.placedAt}, 'YYYY-MM-DD')`);
+            rows = data;
+          } else if (kind === "sales-by-product") {
+            const data = await ctx.db
+              .select({
+                product: orderItems.nameEn,
+                quantitySold: sql<number>`sum(${orderItems.quantity})::int`,
+                revenuePaise: sql<number>`coalesce(sum(coalesce(${orderItems.finalLineTotalPaise}, ${orderItems.lineTotalPaise})), 0)::int`,
+              })
+              .from(orderItems)
+              .innerJoin(orders, eq(orderItems.orderId, orders.id))
+              .where(
+                and(
+                  sql`${orders.placedAt} >= ${fromTs}`,
+                  sql`${orders.placedAt} <= ${toTs}`,
+                  sql`${orders.status} <> 'cancelled'`,
+                ),
+              )
+              .groupBy(orderItems.nameEn)
+              .orderBy(sql`2 desc`);
+            rows = data;
+          } else if (kind === "sales-by-category") {
+            const data = await ctx.db
+              .select({
+                category: sql<string>`c.name_en`,
+                revenuePaise: sql<number>`coalesce(sum(coalesce(${orderItems.finalLineTotalPaise}, ${orderItems.lineTotalPaise})), 0)::int`,
+              })
+              .from(orderItems)
+              .innerJoin(orders, eq(orderItems.orderId, orders.id))
+              .innerJoin(products, eq(orderItems.productId, products.id))
+              .innerJoin(sql`categories c`, sql`c.id = ${products.categoryId}`)
+              .where(and(sql`${orders.placedAt} >= ${fromTs}`, sql`${orders.status} <> 'cancelled'`))
+              .groupBy(sql`c.name_en`)
+              .orderBy(sql`2 desc`);
+            rows = data;
+          } else if (kind === "gst-summary") {
+            const data = await ctx.db
+              .select({
+                gstRate: orderItems.gstRate,
+                taxableValuePaise: sql<number>`coalesce(sum(coalesce(${orderItems.finalLineTotalPaise}, ${orderItems.lineTotalPaise})) filter (where ${orders.status} <> 'cancelled'), 0)::int`,
+              })
+              .from(orderItems)
+              .innerJoin(orders, eq(orderItems.orderId, orders.id))
+              .where(and(sql`${orders.placedAt} >= ${fromTs}`, sql`${orders.placedAt} <= ${toTs}`))
+              .groupBy(orderItems.gstRate)
+              .orderBy(orderItems.gstRate);
+            rows = data.map((r) => ({
+              gstRate: r.gstRate,
+              taxableValuePaise: r.taxableValuePaise,
+              taxPaise: Math.round((r.taxableValuePaise * r.gstRate) / (100 + r.gstRate)),
+            }));
+          } else if (kind === "payment-split") {
+            const data = await ctx.db
+              .select({
+                paymentMethod: orders.paymentMethod,
+                paymentStatus: orders.paymentStatus,
+                orders: sql<number>`count(*)::int`,
+                revenuePaise: sql<number>`coalesce(sum(coalesce(${orders.finalGrandTotalPaise}, ${orders.grandTotalPaise})), 0)::int`,
+              })
+              .from(orders)
+              .where(and(sql`${orders.placedAt} >= ${fromTs}`, sql`${orders.placedAt} <= ${toTs}`))
+              .groupBy(orders.paymentMethod, orders.paymentStatus);
+            rows = data;
+          } else if (kind === "top-customers") {
+            const data = await ctx.db
+              .select({
+                customer: sql<string>`coalesce(u.name, 'Guest')`,
+                phone: sql<string>`coalesce(u.phone_number, '')`,
+                orders: sql<number>`count(*)::int`,
+                spentPaise: sql<number>`coalesce(sum(coalesce(${orders.finalGrandTotalPaise}, ${orders.grandTotalPaise})), 0)::int`,
+              })
+              .from(orders)
+              .leftJoin(sql`"user" u`, sql`u.id = ${orders.userId}`)
+              .where(and(sql`${orders.placedAt} >= ${fromTs}`, sql`${orders.status} = 'delivered'`))
+              .groupBy(sql`u.name, u.phone_number`)
+              .orderBy(sql`4 desc`)
+              .limit(50);
+            rows = data;
+          } else {
+            return c.json(
+              { ok: false as const, code: "NOT_FOUND", message: `Unknown report "${kind}"` },
+              404,
+            );
+          }
 
-        if (asCsv) {
-          const headers = rows.length > 0 ? Object.keys(rows[0]!) : ["empty"];
-          const escape = (value: unknown): string => {
-            const s = value == null ? "" : String(value);
-            return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
-          };
-          const csv = [
-            headers.join(","),
-            ...rows.map((r) => headers.map((h) => escape(r[h])).join(",")),
-          ].join("\n");
-          return new Response(csv, {
-            headers: {
-              "content-type": "text/csv; charset=utf-8",
-              "content-disposition": `attachment; filename="pgrs-${kind}-${from}-to-${to}.csv"`,
-            },
-          });
-        }
-        return c.json(ok({ kind, from, to, rows }));
-      })
+          if (asCsv) {
+            const headers = rows.length > 0 ? Object.keys(rows[0]!) : ["empty"];
+            const escape = (value: unknown): string => {
+              const s = value == null ? "" : String(value);
+              return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+            };
+            const csv = [
+              headers.join(","),
+              ...rows.map((r) => headers.map((h) => escape(r[h])).join(",")),
+            ].join("\n");
+            return new Response(csv, {
+              headers: {
+                "content-type": "text/csv; charset=utf-8",
+                "content-disposition": `attachment; filename="pgrs-${kind}-${from}-to-${to}.csv"`,
+              },
+            });
+          }
+          return c.json(ok({ kind, from, to, rows }));
+        },
+      )
   );
 }

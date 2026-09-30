@@ -1,0 +1,31 @@
+{
+  "nodes": [
+    {
+      "id": "apps_web_public_icon_icon",
+      "label": "Circular green leaf icon",
+      "file_type": "image",
+      "source_file": "web/public/icon.svg",
+      "source_location": null
+    },
+    {
+      "id": "apps_web_public_icon_leaf",
+      "label": "Stylized leaf motif",
+      "file_type": "concept",
+      "source_file": "web/public/icon.svg",
+      "source_location": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "apps_web_public_icon_icon",
+      "target": "apps_web_public_icon_leaf",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "web/public/icon.svg",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": []
+}
