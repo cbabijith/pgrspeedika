@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./app": "./src/app.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "dev:worker": "tsx watch src/worker.ts",
-    "build": "tsup src/index.ts src/worker.ts --format esm --dts --clean --outDir dist --target node22",
+    "dev:worker": "tsx watch src/worker/run.ts",
+    "build": "tsup src/index.ts src/worker/run.ts --format esm --dts --clean --outDir dist --target node22",
     "start": "node dist/index.js",
-    "start:worker": "node dist/worker.js",
+    "start:worker": "node dist/worker/run.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",

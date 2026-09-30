@@ -180,6 +180,7 @@ export function checkoutRoutes(ctx: AppContext) {
               amountPaise: payment.amountPaise,
               keyId: payment.keyId,
               mock: payment.mock,
+              mockPay: payment.mockPay,
             };
           } else if (
             result.status === "pending_payment" &&
@@ -193,6 +194,7 @@ export function checkoutRoutes(ctx: AppContext) {
               amountPaise: payment.amountPaise,
               keyId: payment.keyId,
               mock: payment.mock,
+              mockPay: payment.mockPay,
             };
           }
 

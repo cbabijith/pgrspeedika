@@ -1,0 +1,614 @@
+{
+  "admin/package.json": {
+    "size": 1123,
+    "mtime_ns": 1790797487948042363,
+    "indexed_at_ns": 1790797507705837000,
+    "word_count": 90,
+    "hashes": { "admin/package.json": "3bd0ffcdddb39f2f1f7359c65776e1884f97b1b5d0457e7372a1168b5802cdac" }
+  },
+  "backend/package.json": {
+    "size": 1300,
+    "mtime_ns": 1790797487948175113,
+    "indexed_at_ns": 1790797507706251000,
+    "word_count": 107,
+    "hashes": { "backend/package.json": "1bc75c0a668a74c2e18a98d39e175c9e9783f3a75358dfb669bb301481bfadd1" }
+  },
+  "backend/src/app.ts": {
+    "size": 4399,
+    "mtime_ns": 1790797487948302530,
+    "indexed_at_ns": 1790797491173757000,
+    "word_count": 479
+  },
+  "backend/src/env.ts": {
+    "size": 2145,
+    "mtime_ns": 1790794160483537967,
+    "indexed_at_ns": 1790797491173926000,
+    "word_count": 163
+  },
+  "backend/src/index.ts": {
+    "size": 576,
+    "mtime_ns": 1790793994040728857,
+    "indexed_at_ns": 1790797491174077000,
+    "word_count": 81
+  },
+  "backend/src/lib/app-context.ts": {
+    "size": 2261,
+    "mtime_ns": 1790794160493306615,
+    "indexed_at_ns": 1790797491174241000,
+    "word_count": 253
+  },
+  "backend/src/lib/audit.ts": {
+    "size": 1034,
+    "mtime_ns": 1790793994040897357,
+    "indexed_at_ns": 1790797491174412000,
+    "word_count": 127
+  },
+  "backend/src/lib/context.ts": {
+    "size": 2120,
+    "mtime_ns": 1790793994040960732,
+    "indexed_at_ns": 1790797491174573000,
+    "word_count": 269
+  },
+  "backend/src/lib/errors.ts": {
+    "size": 3446,
+    "mtime_ns": 1790794160505511727,
+    "indexed_at_ns": 1790797491174738000,
+    "word_count": 442
+  },
+  "backend/src/lib/hono.ts": {
+    "size": 442,
+    "mtime_ns": 1790793994041103483,
+    "indexed_at_ns": 1790797491174913000,
+    "word_count": 67
+  },
+  "backend/src/lib/logger.ts": {
+    "size": 387,
+    "mtime_ns": 1790793994041189733,
+    "indexed_at_ns": 1790797491175079000,
+    "word_count": 50
+  },
+  "backend/src/lib/notify.ts": {
+    "size": 2191,
+    "mtime_ns": 1790793994041267483,
+    "indexed_at_ns": 1790797491175238000,
+    "word_count": 235
+  },
+  "backend/src/lib/rate-limit.ts": {
+    "size": 1525,
+    "mtime_ns": 1790793994041336692,
+    "indexed_at_ns": 1790797491175405000,
+    "word_count": 215
+  },
+  "backend/src/load-env.ts": {
+    "size": 213,
+    "mtime_ns": 1790793994041397233,
+    "indexed_at_ns": 1790797491175551000,
+    "word_count": 33
+  },
+  "backend/src/modules/account.ts": {
+    "size": 7026,
+    "mtime_ns": 1790794160529650452,
+    "indexed_at_ns": 1790797491175715000,
+    "word_count": 521
+  },
+  "backend/src/modules/admin/catalog.ts": {
+    "size": 31961,
+    "mtime_ns": 1790794160563123032,
+    "indexed_at_ns": 1790797491176029000,
+    "word_count": 2421
+  },
+  "backend/src/modules/admin/index.ts": {
+    "size": 1112,
+    "mtime_ns": 1790794008431895852,
+    "indexed_at_ns": 1790797491176364000,
+    "word_count": 113
+  },
+  "backend/src/modules/admin/marketing.ts": {
+    "size": 9532,
+    "mtime_ns": 1790794160575007102,
+    "indexed_at_ns": 1790797491176556000,
+    "word_count": 757
+  },
+  "backend/src/modules/admin/orders.ts": {
+    "size": 14002,
+    "mtime_ns": 1790794160587377215,
+    "indexed_at_ns": 1790797491176767000,
+    "word_count": 1147
+  },
+  "backend/src/modules/admin/platform.ts": {
+    "size": 14563,
+    "mtime_ns": 1790794160601927583,
+    "indexed_at_ns": 1790797491176976000,
+    "word_count": 1116
+  },
+  "backend/src/modules/admin/reports.ts": {
+    "size": 10687,
+    "mtime_ns": 1790794160609604851,
+    "indexed_at_ns": 1790797491177186000,
+    "word_count": 778
+  },
+  "backend/src/modules/auth.ts": {
+    "size": 954,
+    "mtime_ns": 1790794160613489486,
+    "indexed_at_ns": 1790797491177374000,
+    "word_count": 98
+  },
+  "backend/src/modules/cart.ts": {
+    "size": 7400,
+    "mtime_ns": 1790797487948451572,
+    "indexed_at_ns": 1790797491177532000,
+    "word_count": 701
+  },
+  "backend/src/modules/catalog.ts": {
+    "size": 1693,
+    "mtime_ns": 1790794160619759584,
+    "indexed_at_ns": 1790797491177708000,
+    "word_count": 157
+  },
+  "backend/src/modules/checkout.ts": {
+    "size": 8338,
+    "mtime_ns": 1790797487948578781,
+    "indexed_at_ns": 1790797491177875000,
+    "word_count": 678
+  },
+  "backend/src/modules/health.ts": {
+    "size": 3876,
+    "mtime_ns": 1790794008430560723,
+    "indexed_at_ns": 1790797491178057000,
+    "word_count": 255
+  },
+  "backend/src/modules/orders.ts": {
+    "size": 5158,
+    "mtime_ns": 1790794160637833086,
+    "indexed_at_ns": 1790797491178222000,
+    "word_count": 497
+  },
+  "backend/src/modules/payments.ts": {
+    "size": 5125,
+    "mtime_ns": 1790794160641985762,
+    "indexed_at_ns": 1790797491178396000,
+    "word_count": 479
+  },
+  "backend/src/modules/search.ts": {
+    "size": 854,
+    "mtime_ns": 1790794160643709558,
+    "indexed_at_ns": 1790797491178567000,
+    "word_count": 95
+  },
+  "backend/src/modules/uploads.ts": {
+    "size": 5951,
+    "mtime_ns": 1790794160648845528,
+    "indexed_at_ns": 1790797491178727000,
+    "word_count": 576
+  },
+  "backend/src/services/cart.ts": {
+    "size": 7994,
+    "mtime_ns": 1790794160655995546,
+    "indexed_at_ns": 1790797491178900000,
+    "word_count": 798
+  },
+  "backend/src/services/catalog.ts": {
+    "size": 11435,
+    "mtime_ns": 1790794160668733409,
+    "indexed_at_ns": 1790797491179078000,
+    "word_count": 1019
+  },
+  "backend/src/services/coupons.ts": {
+    "size": 2010,
+    "mtime_ns": 1790793994043335613,
+    "indexed_at_ns": 1790797491179263000,
+    "word_count": 231
+  },
+  "backend/src/services/invoice.ts": {
+    "size": 8221,
+    "mtime_ns": 1790794160681507273,
+    "indexed_at_ns": 1790797491179433000,
+    "word_count": 896
+  },
+  "backend/src/services/orders.ts": {
+    "size": 40659,
+    "mtime_ns": 1790797487948745906,
+    "indexed_at_ns": 1790797491179614000,
+    "word_count": 3406
+  },
+  "backend/src/services/payments.ts": {
+    "size": 4511,
+    "mtime_ns": 1790793994043614322,
+    "indexed_at_ns": 1790797491179884000,
+    "word_count": 463
+  },
+  "backend/src/services/pricing.ts": {
+    "size": 4783,
+    "mtime_ns": 1790794160718510570,
+    "indexed_at_ns": 1790797491180049000,
+    "word_count": 556
+  },
+  "backend/src/services/slots.ts": {
+    "size": 4814,
+    "mtime_ns": 1790794160726051796,
+    "indexed_at_ns": 1790797491180214000,
+    "word_count": 518
+  },
+  "backend/src/services/stock.ts": {
+    "size": 5042,
+    "mtime_ns": 1790794160730079639,
+    "indexed_at_ns": 1790797491180380000,
+    "word_count": 510
+  },
+  "backend/src/worker/handlers.ts": {
+    "size": 11239,
+    "mtime_ns": 1790794160738626993,
+    "indexed_at_ns": 1790797491180547000,
+    "word_count": 1095
+  },
+  "backend/src/worker/run.ts": {
+    "size": 2966,
+    "mtime_ns": 1790793994044045615,
+    "indexed_at_ns": 1790797491180741000,
+    "word_count": 333
+  },
+  "backend/tsconfig.json": {
+    "size": 190,
+    "mtime_ns": 1790791350178681688,
+    "indexed_at_ns": 1790797507706395000,
+    "word_count": 17,
+    "hashes": { "backend/tsconfig.json": "cfc10ca6adc5008abb433e6b872fad5c30089e8363fcb4af58a860aa578153ea" }
+  },
+  "web/eslint.config.mjs": {
+    "size": 93,
+    "mtime_ns": 1790797487948864032,
+    "indexed_at_ns": 1790797491181027000,
+    "word_count": 11
+  },
+  "web/next-env.d.ts": {
+    "size": 262,
+    "mtime_ns": 1790797487948943615,
+    "indexed_at_ns": 1790797491181156000,
+    "word_count": 26
+  },
+  "web/next.config.ts": {
+    "size": 490,
+    "mtime_ns": 1790797487949015615,
+    "indexed_at_ns": 1790797491181288000,
+    "word_count": 58
+  },
+  "web/package.json": {
+    "size": 1208,
+    "mtime_ns": 1790797487949106574,
+    "indexed_at_ns": 1790797507706500000,
+    "word_count": 97,
+    "hashes": { "web/package.json": "c922347b27a5851adab692d0c82a02a56225f8c58c794bcb09934328ae9dcfdc" }
+  },
+  "web/postcss.config.mjs": {
+    "size": 94,
+    "mtime_ns": 1790797487949188991,
+    "indexed_at_ns": 1790797491181571000,
+    "word_count": 13
+  },
+  "web/public/icon.svg": {
+    "size": 445,
+    "mtime_ns": 1790797487949296408,
+    "indexed_at_ns": 1790797508549280000,
+    "word_count": 55,
+    "hashes": { "web/public/icon.svg": "6c8df9ebc7e5d83eefeba8ab45de0dff4bd428f989682d1829885957df3a148d" }
+  },
+  "web/public/sw.js": {
+    "size": 1748,
+    "mtime_ns": 1790797487949374616,
+    "indexed_at_ns": 1790797491181860000,
+    "word_count": 158
+  },
+  "web/src/app/about/page.tsx": {
+    "size": 1218,
+    "mtime_ns": 1790797487949557950,
+    "indexed_at_ns": 1790797491182034000,
+    "word_count": 154
+  },
+  "web/src/app/account/page.tsx": {
+    "size": 147,
+    "mtime_ns": 1790797487949658742,
+    "indexed_at_ns": 1790797491182205000,
+    "word_count": 17
+  },
+  "web/src/app/cart/page.tsx": {
+    "size": 129,
+    "mtime_ns": 1790797487949758617,
+    "indexed_at_ns": 1790797491182373000,
+    "word_count": 17
+  },
+  "web/src/app/category/[slug]/page.tsx": {
+    "size": 1505,
+    "mtime_ns": 1790797487949920201,
+    "indexed_at_ns": 1790797491182560000,
+    "word_count": 178
+  },
+  "web/src/app/checkout/page.tsx": {
+    "size": 151,
+    "mtime_ns": 1790797487950034659,
+    "indexed_at_ns": 1790797491182736000,
+    "word_count": 17
+  },
+  "web/src/app/contact/page.tsx": {
+    "size": 1171,
+    "mtime_ns": 1790797487950142368,
+    "indexed_at_ns": 1790797491182900000,
+    "word_count": 123
+  },
+  "web/src/app/faq/page.tsx": {
+    "size": 1830,
+    "mtime_ns": 1790797487950321451,
+    "indexed_at_ns": 1790797491183073000,
+    "word_count": 252
+  },
+  "web/src/app/layout.tsx": {
+    "size": 1664,
+    "mtime_ns": 1790797487950496577,
+    "indexed_at_ns": 1790797491183346000,
+    "word_count": 186
+  },
+  "web/src/app/login/page.tsx": {
+    "size": 479,
+    "mtime_ns": 1790797487950629327,
+    "indexed_at_ns": 1790797491183529000,
+    "word_count": 64
+  },
+  "web/src/app/manifest.ts": {
+    "size": 574,
+    "mtime_ns": 1790797487950714536,
+    "indexed_at_ns": 1790797491183683000,
+    "word_count": 61
+  },
+  "web/src/app/media/[...path]/route.ts": {
+    "size": 970,
+    "mtime_ns": 1790797487950886245,
+    "indexed_at_ns": 1790797491183864000,
+    "word_count": 119
+  },
+  "web/src/app/not-found.tsx": {
+    "size": 516,
+    "mtime_ns": 1790797487950984411,
+    "indexed_at_ns": 1790797491184019000,
+    "word_count": 60
+  },
+  "web/src/app/offers/page.tsx": {
+    "size": 586,
+    "mtime_ns": 1790797487951124037,
+    "indexed_at_ns": 1790797491184183000,
+    "word_count": 77
+  },
+  "web/src/app/orders/[id]/page.tsx": {
+    "size": 145,
+    "mtime_ns": 1790797487951321246,
+    "indexed_at_ns": 1790797491184365000,
+    "word_count": 17
+  },
+  "web/src/app/orders/page.tsx": {
+    "size": 137,
+    "mtime_ns": 1790797487951411662,
+    "indexed_at_ns": 1790797491184529000,
+    "word_count": 17
+  },
+  "web/src/app/page.tsx": {
+    "size": 1309,
+    "mtime_ns": 1790797487951502496,
+    "indexed_at_ns": 1790797491184679000,
+    "word_count": 139
+  },
+  "web/src/app/privacy/page.tsx": {
+    "size": 1143,
+    "mtime_ns": 1790797487951640538,
+    "indexed_at_ns": 1790797491184851000,
+    "word_count": 146
+  },
+  "web/src/app/products/[slug]/page.tsx": {
+    "size": 2845,
+    "mtime_ns": 1790797487951804413,
+    "indexed_at_ns": 1790797491185034000,
+    "word_count": 267
+  },
+  "web/src/app/refund-policy/page.tsx": {
+    "size": 1219,
+    "mtime_ns": 1790797487951932164,
+    "indexed_at_ns": 1790797491185208000,
+    "word_count": 166
+  },
+  "web/src/app/robots.ts": {
+    "size": 398,
+    "mtime_ns": 1790797487952022539,
+    "indexed_at_ns": 1790797491185363000,
+    "word_count": 41
+  },
+  "web/src/app/search/page.tsx": {
+    "size": 623,
+    "mtime_ns": 1790797487952161581,
+    "indexed_at_ns": 1790797491185527000,
+    "word_count": 79
+  },
+  "web/src/app/sitemap.ts": {
+    "size": 947,
+    "mtime_ns": 1790797487952264831,
+    "indexed_at_ns": 1790797491185697000,
+    "word_count": 100
+  },
+  "web/src/app/terms/page.tsx": {
+    "size": 1164,
+    "mtime_ns": 1790797487952386873,
+    "indexed_at_ns": 1790797491185866000,
+    "word_count": 153
+  },
+  "web/src/app/wishlist/page.tsx": {
+    "size": 1953,
+    "mtime_ns": 1790797487952502748,
+    "indexed_at_ns": 1790797491186036000,
+    "word_count": 196
+  },
+  "web/src/components/account-client.tsx": {
+    "size": 4845,
+    "mtime_ns": 1790797487952654582,
+    "indexed_at_ns": 1790797491186209000,
+    "word_count": 410
+  },
+  "web/src/components/add-to-cart-panel.tsx": {
+    "size": 4430,
+    "mtime_ns": 1790797487952759207,
+    "indexed_at_ns": 1790797491186386000,
+    "word_count": 410
+  },
+  "web/src/components/banner-carousel.tsx": {
+    "size": 3013,
+    "mtime_ns": 1790797487952842707,
+    "indexed_at_ns": 1790797491186558000,
+    "word_count": 290
+  },
+  "web/src/components/cart-drawer.tsx": {
+    "size": 9173,
+    "mtime_ns": 1790797487952964791,
+    "indexed_at_ns": 1790797491186719000,
+    "word_count": 660
+  },
+  "web/src/components/cart-full.tsx": {
+    "size": 8021,
+    "mtime_ns": 1790797487953068916,
+    "indexed_at_ns": 1790797491186900000,
+    "word_count": 604
+  },
+  "web/src/components/catalog-browser.tsx": {
+    "size": 5897,
+    "mtime_ns": 1790797487953184792,
+    "indexed_at_ns": 1790797491187079000,
+    "word_count": 507
+  },
+  "web/src/components/checkout-client.tsx": {
+    "size": 22063,
+    "mtime_ns": 1790797487953311959,
+    "indexed_at_ns": 1790797491187267000,
+    "word_count": 1733
+  },
+  "web/src/components/footer.tsx": {
+    "size": 2675,
+    "mtime_ns": 1790797487953439042,
+    "indexed_at_ns": 1790797491187486000,
+    "word_count": 177
+  },
+  "web/src/components/header.tsx": {
+    "size": 3956,
+    "mtime_ns": 1790797487953540626,
+    "indexed_at_ns": 1790797491187652000,
+    "word_count": 380
+  },
+  "web/src/components/home-content.tsx": {
+    "size": 6220,
+    "mtime_ns": 1790797487953690168,
+    "indexed_at_ns": 1790797491187821000,
+    "word_count": 482
+  },
+  "web/src/components/login-form.tsx": {
+    "size": 6155,
+    "mtime_ns": 1790797487953801959,
+    "indexed_at_ns": 1790797491187994000,
+    "word_count": 533
+  },
+  "web/src/components/order-detail.tsx": {
+    "size": 13410,
+    "mtime_ns": 1790797487953941793,
+    "indexed_at_ns": 1790797491188169000,
+    "word_count": 997
+  },
+  "web/src/components/orders-list.tsx": {
+    "size": 4054,
+    "mtime_ns": 1790797487954060919,
+    "indexed_at_ns": 1790797491188368000,
+    "word_count": 355
+  },
+  "web/src/components/pincode-check.tsx": {
+    "size": 4217,
+    "mtime_ns": 1790797487954182460,
+    "indexed_at_ns": 1790797491188537000,
+    "word_count": 393
+  },
+  "web/src/components/product-card.tsx": {
+    "size": 4916,
+    "mtime_ns": 1790797487954303419,
+    "indexed_at_ns": 1790797491188708000,
+    "word_count": 444
+  },
+  "web/src/components/product-detail-client.tsx": {
+    "size": 4523,
+    "mtime_ns": 1790797487954477503,
+    "indexed_at_ns": 1790797491188879000,
+    "word_count": 362
+  },
+  "web/src/components/providers.tsx": {
+    "size": 618,
+    "mtime_ns": 1790797487954610420,
+    "indexed_at_ns": 1790797491189046000,
+    "word_count": 65
+  },
+  "web/src/components/search-box.tsx": {
+    "size": 3860,
+    "mtime_ns": 1790797487954733212,
+    "indexed_at_ns": 1790797491189202000,
+    "word_count": 342
+  },
+  "web/src/components/service-worker.tsx": {
+    "size": 519,
+    "mtime_ns": 1790797487954839420,
+    "indexed_at_ns": 1790797491189365000,
+    "word_count": 63
+  },
+  "web/src/components/static-page.tsx": {
+    "size": 758,
+    "mtime_ns": 1790797487954931004,
+    "indexed_at_ns": 1790797491189521000,
+    "word_count": 77
+  },
+  "web/src/lib/api.ts": {
+    "size": 1136,
+    "mtime_ns": 1790797487955072838,
+    "indexed_at_ns": 1790797491189675000,
+    "word_count": 151
+  },
+  "web/src/lib/auth.ts": {
+    "size": 164,
+    "mtime_ns": 1790797487955169004,
+    "indexed_at_ns": 1790797491189833000,
+    "word_count": 19
+  },
+  "web/src/lib/constants.ts": {
+    "size": 154,
+    "mtime_ns": 1790797487955273213,
+    "indexed_at_ns": 1790797491189993000,
+    "word_count": 18
+  },
+  "web/src/lib/hooks.ts": {
+    "size": 4647,
+    "mtime_ns": 1790797487955383713,
+    "indexed_at_ns": 1790797491190151000,
+    "word_count": 499
+  },
+  "web/src/lib/server-api.ts": {
+    "size": 461,
+    "mtime_ns": 1790797487955491713,
+    "indexed_at_ns": 1790797491190321000,
+    "word_count": 67
+  },
+  "web/src/store/cart.ts": {
+    "size": 2053,
+    "mtime_ns": 1790797487955644922,
+    "indexed_at_ns": 1790797491190474000,
+    "word_count": 241
+  },
+  "web/src/store/ui.ts": {
+    "size": 961,
+    "mtime_ns": 1790797487955749756,
+    "indexed_at_ns": 1790797491190632000,
+    "word_count": 126
+  },
+  "web/tsconfig.json": {
+    "size": 287,
+    "mtime_ns": 1790797487955858964,
+    "indexed_at_ns": 1790797507706644000,
+    "word_count": 23,
+    "hashes": { "web/tsconfig.json": "fa8f30582b5a0a1aaf2520346a644d87ce3e08c8a1806ef488c46280cb657de5" }
+  }
+}

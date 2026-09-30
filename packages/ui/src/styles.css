@@ -1,0 +1,34 @@
+@import "tailwindcss";
+@import "@pgrs/config/tailwind-theme.css";
+@source "./**/*.{ts,tsx}";
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+  body {
+    background-color: var(--color-page);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .skeleton-shimmer {
+    animation: pgrs-shimmer 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes pgrs-shimmer {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}

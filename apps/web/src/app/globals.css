@@ -1,0 +1,48 @@
+@import "tailwindcss";
+@import "@pgrs/config/tailwind-theme.css";
+@source "../../packages/ui/src/**/*.{ts,tsx}";
+@source "./src/**/*.{ts,tsx}";
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background:
+      radial-gradient(1200px 400px at 50% -200px, var(--color-primary-50), transparent), var(--color-page);
+    min-height: 100dvh;
+  }
+}
+
+@layer components {
+  .container-page {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 1200px;
+    padding-inline: 1rem;
+  }
+  @media (min-width: 768px) {
+    .container-page {
+      padding-inline: 2rem;
+    }
+  }
+  .section-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--color-ink);
+    letter-spacing: -0.01em;
+  }
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    background: var(--color-primary);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0 0 0.75rem 0;
+  }
+  .skip-link:focus {
+    left: 0;
+  }
+}

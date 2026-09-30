@@ -30,7 +30,7 @@ import { computeAdjustedBill, computeBill, computeLine, type PricedLine } from "
 import { validateCoupon } from "./coupons";
 import { bookSlot, isValidDateString, istTodayDateString, releaseSlot } from "./slots";
 import { commitSale, releaseStock, reserveStock } from "./stock";
-import { createProviderOrder, createProviderRefund } from "./payments";
+import { createProviderOrder, createProviderRefund, mockPaymentSignature } from "./payments";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
@@ -79,6 +79,8 @@ export interface PlaceOrderResult {
     amountPaise: number;
     keyId: string | null;
     mock: boolean;
+    /** Dev-only pre-signed pseudo payment for mock mode checkouts. */
+    mockPay?: { paymentId: string; signature: string };
   };
 }
 
@@ -482,6 +484,17 @@ export async function ensureProviderOrder(
       .where(eq(payments.id, payment.id));
   }
 
+  // Dev mock mode: hand the browser a pre-signed pseudo-payment so the whole
+  // checkout flow works without Razorpay keys. The signature is server-side.
+  let mockPay: { paymentId: string; signature: string } | undefined;
+  if (providerOrderId.startsWith("mock_")) {
+    const mockPaymentId = `mock_pay_${randomUUID().slice(0, 12)}`;
+    mockPay = {
+      paymentId: mockPaymentId,
+      signature: mockPaymentSignature(ctx.env, providerOrderId, mockPaymentId),
+    };
+  }
+
   return {
     orderId: order.id,
     paymentId: payment.id,
@@ -489,6 +502,7 @@ export async function ensureProviderOrder(
     amountPaise: order.grandTotalPaise,
     keyId: ctx.env.RAZORPAY_KEY_ID || null,
     mock,
+    mockPay,
   };
 }
 

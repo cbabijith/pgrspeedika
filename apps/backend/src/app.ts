@@ -3,8 +3,10 @@ import { cors } from "hono/cors";
 import { randomUUID } from "node:crypto";
 import { getEnv } from "./env";
 import { createAppContext, log } from "./lib/app-context";
+import type { AppContext } from "./lib/app-context";
 import { errorResponse } from "./lib/errors";
 import type { PgrsVariables } from "./lib/hono";
+import { newHono } from "./lib/hono";
 import { rateLimit, RATE_LIMITS } from "./lib/rate-limit";
 import { authRoutes } from "./modules/auth";
 import { healthRoutes } from "./modules/health";
@@ -96,3 +98,33 @@ export function buildApp() {
 }
 
 export type AppType = ReturnType<typeof buildApp>["app"];
+
+/**
+ * Smaller route groups exported purely for typed RPC clients. The full chain
+ * (~90 endpoints) exceeds TypeScript's inference depth, so the storefront
+ * uses PublicAppType and the admin panel uses AdminAppType. Never executed.
+ */
+export function buildPublicAppType(ctx: AppContext) {
+  return newHono()
+    .route("/", healthRoutes(ctx))
+    .route("/", authRoutes(ctx))
+    .route("/", catalogRoutes(ctx))
+    .route("/", searchRoutes(ctx))
+    .route("/", cartRoutes(ctx))
+    .route("/", checkoutRoutes(ctx))
+    .route("/", orderRoutes(ctx))
+    .route("/", paymentRoutes(ctx))
+    .route("/", accountRoutes(ctx));
+}
+
+export function buildAdminAppType(ctx: AppContext) {
+  return newHono()
+    .route("/", authRoutes(ctx))
+    .route("/", catalogRoutes(ctx))
+    .route("/", searchRoutes(ctx))
+    .route("/", uploadRoutes(ctx))
+    .route("/", adminRoutes(ctx));
+}
+
+export type PublicAppType = ReturnType<typeof buildPublicAppType>;
+export type AdminAppType = ReturnType<typeof buildAdminAppType>;
