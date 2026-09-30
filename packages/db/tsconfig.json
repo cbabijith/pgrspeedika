@@ -1,0 +1,9 @@
+{
+  "extends": "@pgrs/config/tsconfig.node.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": ["src", "scripts", "drizzle.config.ts"]
+}

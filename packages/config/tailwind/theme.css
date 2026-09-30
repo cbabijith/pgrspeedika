@@ -1,0 +1,48 @@
+/*
+ * PGRS Peedika — Tailwind CSS v4 theme tokens (green + white brand).
+ * Import from the consuming app's globals.css:
+ *   @import "@pgrs/config/tailwind-theme.css";
+ *   @import "tailwindcss";
+ */
+@theme {
+  /* Brand greens */
+  --color-primary: #1b7a3e;
+  --color-primary-dark: #14532d;
+  --color-primary-surface: #e8f5e9;
+  --color-primary-50: #f0fdf4;
+  --color-primary-100: #dcfce7;
+  --color-primary-200: #bbe7c9;
+  --color-primary-300: #86d3a4;
+  --color-primary-400: #4cb87a;
+  --color-primary-500: #1b7a3e;
+  --color-primary-600: #166a35;
+  --color-primary-700: #14532d;
+  --color-primary-800: #0f3d22;
+  --color-primary-900: #0a2b18;
+
+  /* Neutrals */
+  --color-page: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f9fafb;
+  --color-ink: #1f2937;
+  --color-muted: #6b7280;
+  --color-line: #e5e7eb;
+
+  /* Accents */
+  --color-accent: #f5a623;
+  --color-accent-surface: #fef3e2;
+  --color-danger: #dc2626;
+  --color-danger-surface: #fee2e2;
+  --color-success: #1b7a3e;
+
+  /* Typography */
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, "Noto Sans Malayalam", sans-serif;
+
+  /* Radii — rounded, friendly storefront */
+  --radius-card: 1rem;
+  --radius-pill: 9999px;
+
+  /* Shadows — soft and airy */
+  --shadow-card: 0 1px 2px rgb(31 41 55 / 0.05), 0 4px 16px rgb(31 41 55 / 0.06);
+  --shadow-lift: 0 4px 8px rgb(31 41 55 / 0.06), 0 12px 32px rgb(31 41 55 / 0.1);
+}

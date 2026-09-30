@@ -1,0 +1,10 @@
+{
+  "extends": "@pgrs/config/tsconfig.node.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "vitest.config.ts"]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@pgrs/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig/tsconfig.base.json",
+    "./tsconfig.nextjs.json": "./tsconfig/tsconfig.nextjs.json",
+    "./tsconfig.node.json": "./tsconfig/tsconfig.node.json",
+    "./eslint": "./eslint/base.mjs",
+    "./prettier": "./prettier/index.mjs",
+    "./tokens": "./tailwind/tokens.ts",
+    "./tailwind-theme.css": "./tailwind/theme.css"
+  },
+  "files": [
+    "tsconfig",
+    "eslint",
+    "prettier",
+    "tailwind"
+  ],
+  "devDependencies": {
+    "eslint": "^9.30.0",
+    "typescript-eslint": "^8.35.0"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.5"
+  }
+}

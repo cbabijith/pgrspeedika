@@ -1,0 +1,44 @@
+{
+  "name": "pgrs-peedika",
+  "private": true,
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ]
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @pgrs/db generate",
+    "db:migrate": "pnpm --filter @pgrs/db migrate",
+    "db:seed": "pnpm --filter @pgrs/db seed",
+    "db:studio": "pnpm --filter @pgrs/db studio",
+    "e2e": "pnpm --filter web exec playwright test",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.0",
+    "@commitlint/config-conventional": "^19.8.0",
+    "@eslint/js": "^9.30.0",
+    "@pgrs/config": "workspace:*",
+    "eslint": "^9.30.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.2",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.4",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.35.0"
+  }
+}

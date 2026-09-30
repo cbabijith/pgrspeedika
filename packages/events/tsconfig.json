@@ -1,0 +1,7 @@
+{
+  "extends": "@pgrs/config/tsconfig.node.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
