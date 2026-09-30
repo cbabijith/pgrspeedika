@@ -1,5 +1,6 @@
 import "./load-env";
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { getDb, schema } from "../src";
 import {
   seedCategories,
@@ -291,26 +292,24 @@ async function main() {
   console.log("Creating owner account …");
   const ownerEmail = process.env.SEED_OWNER_EMAIL || "owner@pgrspeedika.example";
   const ownerPassword = process.env.SEED_OWNER_PASSWORD || generatePassword();
-  const { hashPassword } = await import("better-auth/crypto");
-  const passwordHash = await hashPassword(ownerPassword);
-  const [owner] = await db
-    .insert(schema.user)
-    .values({
-      id: randomUUID(),
-      name: "PGRS Owner",
-      email: ownerEmail,
-      emailVerified: true,
-      role: "owner",
-    })
-    .returning({ id: schema.user.id });
-  if (!owner) throw new Error("Failed to create owner account");
-  await db.insert(schema.account).values({
-    id: randomUUID(),
-    accountId: ownerEmail,
-    providerId: "credential",
-    userId: owner.id,
-    password: passwordHash,
+  // Created through the real Better Auth signup API so the account row shape
+  // (provider id, hash format) always matches what sign-in expects.
+  const { createAuth } = await import("@pgrs/auth");
+  const auth = createAuth({
+    db,
+    secret: process.env.BETTER_AUTH_SECRET || randomBytes(32).toString("base64"),
+    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:4000",
+    sendOtp: async () => {},
   });
+  const result = await auth.api.signUpEmail({
+    body: { name: "PGRS Owner", email: ownerEmail, password: ownerPassword },
+  });
+  const ownerUserId = result.user?.id;
+  if (!ownerUserId) throw new Error("Failed to create owner account");
+  await db
+    .update(schema.user)
+    .set({ role: "owner", emailVerified: true })
+    .where(eq(schema.user.id, ownerUserId));
 
   console.log("");
   console.log("Seed complete.");

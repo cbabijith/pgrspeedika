@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ERROR_CODES } from "./constants";
+import { ERROR_CODES } from "../constants";
 
 export const uuidSchema = z.string().uuid();
 

@@ -8,6 +8,20 @@
       "when": 1790791513189,
       "tag": "0000_cute_magik",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790792265954,
+      "tag": "0001_marvelous_vulcan",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790793185877,
+      "tag": "0002_sour_alice",
+      "breakpoints": true
     }
   ]
 }

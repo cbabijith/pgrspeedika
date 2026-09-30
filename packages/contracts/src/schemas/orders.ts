@@ -12,6 +12,8 @@ export type OrderItemDTO = {
   unitLabelEn: string;
   unitLabelMl: string;
   unitType: string;
+  hsnCode: string;
+  gstRate: number;
   unitPricePaise: number;
   quantity: number;
   orderedQtyGrams: number;

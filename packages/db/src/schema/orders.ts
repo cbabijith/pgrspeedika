@@ -45,6 +45,10 @@ export const paymentRecordStatusEnum = pgEnum("payment_record_status", [
 
 export const refundStatusEnum = pgEnum("refund_status", ["pending", "processed", "failed"]);
 
+export type OrderStatus = (typeof orderStatusEnum.enumValues)[number];
+export type PaymentStatus = (typeof paymentStatusEnum.enumValues)[number];
+export type PaymentMethodValue = (typeof paymentMethodEnum.enumValues)[number];
+
 /** Immutable address snapshot stored on the order at placement time. */
 export type OrderAddressSnapshot = {
   contactName: string;
