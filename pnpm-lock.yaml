@@ -356,18 +356,12 @@ importers:
         specifier: ^3.4.5
         version: 3.4.9
     devDependencies:
-      "@pgrs/auth":
-        specifier: workspace:*
-        version: link:../auth
       "@pgrs/config":
         specifier: workspace:*
         version: link:../config
       "@types/node":
         specifier: ^22.15.0
         version: 22.20.4
-      better-auth:
-        specifier: ^1.3.4
-        version: 1.7.6(drizzle-kit@0.31.11)(drizzle-orm@0.44.7(kysely@0.29.6)(postgres@3.4.9))(next@15.5.27(@playwright/test@1.63.0)(@types/node@22.20.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@3.2.7(@types/node@22.20.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15)(yaml@2.9.1))
       dotenv:
         specifier: ^16.5.0
         version: 16.6.1
@@ -457,6 +451,9 @@ importers:
         specifier: ^3.3.1
         version: 3.7.0
     devDependencies:
+      "@types/node":
+        specifier: ^22.15.0
+        version: 22.20.4
       "@types/react":
         specifier: ^19.1.8
         version: 19.3.0

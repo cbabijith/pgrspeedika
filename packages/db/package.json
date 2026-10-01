@@ -10,7 +10,7 @@
   "scripts": {
     "generate": "drizzle-kit generate",
     "migrate": "tsx scripts/migrate.ts",
-    "seed": "tsx scripts/seed.ts",
+    "seed-catalog": "tsx scripts/seed.ts",
     "studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
@@ -20,10 +20,8 @@
     "postgres": "^3.4.5"
   },
   "devDependencies": {
-    "@pgrs/auth": "workspace:*",
     "@pgrs/config": "workspace:*",
     "@types/node": "^22.15.0",
-    "better-auth": "^1.3.4",
     "dotenv": "^16.5.0",
     "drizzle-kit": "^0.31.2",
     "eslint": "^9.30.0",

@@ -1,6 +1,4 @@
 import "./load-env";
-import { randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
 import { getDb, schema } from "../src";
 import {
   seedCategories,
@@ -289,43 +287,11 @@ async function main() {
   ]);
 
   // ── Owner account ──────────────────────────────────────────────────────────
-  console.log("Creating owner account …");
-  const ownerEmail = process.env.SEED_OWNER_EMAIL || "owner@pgrspeedika.example";
-  const ownerPassword = process.env.SEED_OWNER_PASSWORD || generatePassword();
-  // Created through the real Better Auth signup API so the account row shape
-  // (provider id, hash format) always matches what sign-in expects.
-  const { createAuth } = await import("@pgrs/auth");
-  const auth = createAuth({
-    db,
-    secret: process.env.BETTER_AUTH_SECRET || randomBytes(32).toString("base64"),
-    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:4000",
-    sendOtp: async () => {},
-  });
-  const result = await auth.api.signUpEmail({
-    body: { name: "PGRS Owner", email: ownerEmail, password: ownerPassword },
-  });
-  const ownerUserId = result.user?.id;
-  if (!ownerUserId) throw new Error("Failed to create owner account");
-  await db
-    .update(schema.user)
-    .set({ role: "owner", emailVerified: true })
-    .where(eq(schema.user.id, ownerUserId));
-
+  // Owner creation lives in apps/backend (which depends on both @pgrs/db and
+  // @pgrs/auth); keeping it out of this package avoids a dependency cycle.
   console.log("");
-  console.log("Seed complete.");
-  console.log(`  Owner login → email: ${ownerEmail}`);
-  if (!process.env.SEED_OWNER_PASSWORD) {
-    console.log(`  Generated password (set SEED_OWNER_PASSWORD to keep it stable): ${ownerPassword}`);
-  } else {
-    console.log("  Password: from SEED_OWNER_PASSWORD");
-  }
+  console.log("Catalog seed complete (owner account is created by apps/backend).");
   process.exit(0);
-}
-
-function generatePassword(): string {
-  const alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = randomBytes(16);
-  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("") + "!9a";
 }
 
 main().catch((err) => {
