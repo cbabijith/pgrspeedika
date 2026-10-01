@@ -31,3 +31,5 @@ apps/backend/uploads/
 !.vscode/extensions.json
 .idea/
 .mimosa/
+# analysis artifacts
+graphify-out/
