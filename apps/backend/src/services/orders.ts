@@ -1024,6 +1024,7 @@ export async function getOrderDTO(db: Database, orderId: string): Promise<OrderD
     id: order.id,
     orderNumber: order.orderNumber,
     status: order.status,
+    source: order.source,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
     address: order.address,
@@ -1084,6 +1085,7 @@ export interface OrderSummary {
   id: string;
   orderNumber: string;
   status: OrderStatus;
+  source: string;
   paymentMethod: "razorpay" | "cod";
   paymentStatus: string;
   grandTotalPaise: number;
@@ -1103,6 +1105,7 @@ export interface OrderListFilters {
   slotId?: string;
   pincode?: string;
   q?: string;
+  source?: "web" | "whatsapp";
   page: number;
   pageSize: number;
 }
@@ -1120,6 +1123,7 @@ export async function listOrderSummaries(
   if (filters.date) conditions.push(eq(orders.slotDate, filters.date));
   if (filters.slotId) conditions.push(eq(orders.slotId, filters.slotId));
   if (filters.pincode) conditions.push(eq(orders.pincode, filters.pincode));
+  if (filters.source) conditions.push(eq(orders.source, filters.source));
   if (filters.q) {
     const like = `%${filters.q}%`;
     conditions.push(
@@ -1137,6 +1141,7 @@ export async function listOrderSummaries(
       id: orders.id,
       orderNumber: orders.orderNumber,
       status: orders.status,
+      source: orders.source,
       paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
       grandTotalPaise: orders.grandTotalPaise,

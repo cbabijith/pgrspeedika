@@ -58,6 +58,7 @@ export type OrderDTO = {
   id: string;
   orderNumber: string;
   status: OrderStatus;
+  source: string;
   paymentMethod: PaymentMethod;
   paymentStatus: string;
   address: {

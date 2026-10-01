@@ -38,6 +38,7 @@ const statusValues = [
 
 const boardQuery = orderFiltersSchema.extend(paginationQuerySchema.shape).extend({
   status: z.enum(statusValues).optional(),
+  source: z.enum(["web", "whatsapp"]).optional(),
 });
 
 const statusTransitionSchema = z.object({
@@ -64,6 +65,7 @@ export function adminOrderRoutes(ctx: AppContext) {
             slotId: q.slotId,
             pincode: q.pincode,
             q: q.q,
+            source: q.source,
             page: q.page,
             pageSize: q.pageSize,
           });

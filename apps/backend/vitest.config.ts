@@ -10,5 +10,7 @@ export default defineConfig({
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
     environment: "node",
     testTimeout: 30_000,
+    // Integration files share one test database — run files one at a time.
+    fileParallelism: false,
   },
 });

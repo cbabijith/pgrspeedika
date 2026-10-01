@@ -74,6 +74,8 @@ export const orders = pgTable(
     orderNumber: text("order_number").notNull(),
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     status: orderStatusEnum("status").notNull().default("pending_payment"),
+    /** Where the order came from: web checkout or the WhatsApp lane. */
+    source: text("source").notNull().default("web"),
     paymentMethod: paymentMethodEnum("payment_method").notNull(),
     paymentStatus: paymentStatusEnum("payment_status").notNull().default("pending"),
     address: jsonb("address").$type<OrderAddressSnapshot>().notNull(),

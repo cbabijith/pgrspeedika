@@ -17,6 +17,7 @@ import { checkoutRoutes } from "./modules/checkout";
 import { orderRoutes } from "./modules/orders";
 import { paymentRoutes } from "./modules/payments";
 import { accountRoutes } from "./modules/account";
+import { whatsappRoutes } from "./modules/whatsapp";
 import { uploadRoutes } from "./modules/uploads";
 import { adminRoutes } from "./modules/admin";
 
@@ -91,6 +92,7 @@ export function buildApp() {
     .route("/", orderRoutes(ctx))
     .route("/", paymentRoutes(ctx))
     .route("/", accountRoutes(ctx))
+    .route("/", whatsappRoutes(ctx))
     .route("/", uploadRoutes(ctx))
     .route("/", adminRoutes(ctx));
 
@@ -114,7 +116,8 @@ export function buildPublicAppType(ctx: AppContext) {
     .route("/", checkoutRoutes(ctx))
     .route("/", orderRoutes(ctx))
     .route("/", paymentRoutes(ctx))
-    .route("/", accountRoutes(ctx));
+    .route("/", accountRoutes(ctx))
+    .route("/", whatsappRoutes(ctx));
 }
 
 export function buildAdminAppType(ctx: AppContext) {

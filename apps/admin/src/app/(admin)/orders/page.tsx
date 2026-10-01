@@ -23,6 +23,7 @@ interface OrderRow {
   id: string;
   orderNumber: string;
   status: OrderStatus;
+  source: string;
   paymentMethod: "razorpay" | "cod";
   paymentStatus: string;
   grandTotalPaise: number;
@@ -43,11 +44,12 @@ const COLUMNS: Array<{ status: OrderStatus; title: string }> = [
 
 export default function OrdersPage() {
   const [status, setStatus] = useState<string>("");
+  const [source, setSource] = useState<string>("");
   const [date, setDate] = useState("");
   const [q, setQ] = useState("");
 
   const orders = useQuery({
-    queryKey: ["admin-orders", status, date, q],
+    queryKey: ["admin-orders", status, date, q, source],
     refetchInterval: 20_000,
     queryFn: () =>
       unwrap<{ items: OrderRow[]; total: number }>(
@@ -58,6 +60,7 @@ export default function OrdersPage() {
             ...(status ? { status: status as OrderStatus } : {}),
             ...(date ? { date } : {}),
             ...(q ? { q } : {}),
+            ...(source ? { source: source as "web" | "whatsapp" } : {}),
           },
         }),
       ),
@@ -96,6 +99,16 @@ export default function OrdersPage() {
             className="w-40 py-1.5 text-xs"
             aria-label="Filter by slot date"
           />
+          <Select
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="w-36 py-1.5 text-xs"
+            aria-label="Filter by source"
+          >
+            <option value="">All sources</option>
+            <option value="web">Web</option>
+            <option value="whatsapp">WhatsApp</option>
+          </Select>
           <Input
             placeholder="order #, name, phone"
             value={q}
@@ -176,6 +189,7 @@ export default function OrdersPage() {
               <thead>
                 <tr>
                   <th>Order</th>
+                  <th>Source</th>
                   <th>Placed</th>
                   <th>Slot</th>
                   <th>Items</th>

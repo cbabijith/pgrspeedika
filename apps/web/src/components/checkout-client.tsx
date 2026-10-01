@@ -235,6 +235,10 @@ export function CheckoutClient() {
           <a href="/login?next=/checkout" className="font-bold underline">
             {t("Go to login", "ലോഗിൻ")}
           </a>
+          {" · "}
+          <a href="/whatsapp" className="font-bold underline">
+            {t("or order on WhatsApp as guest", "അല്ലെങ്കിൽ WhatsApp-ൽ ഓർഡർ ചെയ്യൂ")}
+          </a>
         </Alert>
       </div>
     );

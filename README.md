@@ -112,7 +112,10 @@ signature verification (`x-razorpay-signature` HMAC) is always enforced.
 ## Feature map
 
 **Storefront (`apps/web`)** — banner carousel, category grid, fresh-today /
-best-sellers / seasonal rails; bilingual instant search (EN + മലയാളം) with
+best-sellers / seasonal rails; **guest WhatsApp ordering** (no account — order
+lands in the admin panel _and_ as a pre-filled WhatsApp message to the shop,
+details saved by phone for repeat orders; see
+[docs/whatsapp-ordering.md](docs/whatsapp-ordering.md)); bilingual instant search (EN + മലയാളം) with
 filters and sorting; product pages with variant selector; guest cart (persisted
 locally) merged into the server cart at OTP login; pincode serviceability gate;
 checkout with addresses, slot availability, coupons, COD/UPI; order tracking

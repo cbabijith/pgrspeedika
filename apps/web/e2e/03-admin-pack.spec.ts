@@ -45,8 +45,11 @@ test("admin packs an order and the customer sees the final bill", async ({ brows
   await admin.getByRole("button", { name: /sign in/i }).click();
   await admin.waitForURL(/dashboard/);
 
-  // Find the newest confirmed order.
-  const res = await admin.request.get(`${API}/api/admin/orders?status=confirmed&page=1&pageSize=1`);
+  // Find the newest confirmed WEB order (placed by the checkout spec — the
+  // verifying session belongs to that customer).
+  const res = await admin.request.get(
+    `${API}/api/admin/orders?status=confirmed&source=web&page=1&pageSize=1`,
+  );
   expect(res.ok(), "owner session must authorize the admin API").toBeTruthy();
   const body = (await res.json()) as { data?: { items?: Array<{ id: string; orderNumber: string }> } };
   const order = body.data?.items?.[0];

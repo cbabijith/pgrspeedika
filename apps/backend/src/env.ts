@@ -31,6 +31,9 @@ const envSchema = z.object({
   S3_PUBLIC_URL: z.string().url().or(z.literal("")).default(""),
   NOTIFY_PROVIDER: z.enum(["console", "webhook"]).default("console"),
   NOTIFY_WEBHOOK_URL: z.string().url().or(z.literal("")).default(""),
+  /** WhatsApp Business (Meta Cloud API) inbound webhook; empty = unverified (dev only). */
+  WHATSAPP_APP_SECRET: z.string().default(""),
+  WHATSAPP_VERIFY_TOKEN: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;

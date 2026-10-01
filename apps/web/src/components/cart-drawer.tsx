@@ -208,6 +208,16 @@ export function CartDrawer() {
                 </>
               ) : null}
             </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                router.push("/whatsapp");
+              }}
+              className="text-xs font-semibold text-primary-700 underline"
+            >
+              {t("No account? Order on WhatsApp instead →", "അക്കൗണ്ട് വേണ്ട? WhatsApp-ൽ ഓർഡർ ചെയ്യൂ →")}
+            </button>
           </div>
         </>
       )}
