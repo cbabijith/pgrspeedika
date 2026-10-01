@@ -1,8 +1,6 @@
 import { newHono } from "../../lib/hono";
 import { zValidator } from "@hono/zod-validator";
 import { asc, desc, eq, sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
-import { hashPassword } from "better-auth/crypto";
 import { z } from "zod";
 import {
   shopSettingsSchema,
@@ -12,7 +10,6 @@ import {
   zoneInputSchema,
 } from "@pgrs/contracts";
 import {
-  account as accountTable,
   addresses,
   auditLogs,
   deliverySlots,
@@ -27,6 +24,7 @@ import { badRequest, conflict, notFound, ok } from "../../lib/errors";
 import { requireStaff } from "../../lib/context";
 import { writeAudit } from "../../lib/audit";
 import { getHolidayDates, saveHolidayDates } from "../../services/slots";
+import { createStaffUser } from "../../services/staff";
 
 export function adminPlatformRoutes(ctx: AppContext) {
   return (
@@ -266,31 +264,18 @@ export function adminPlatformRoutes(ctx: AppContext) {
         async (c) => {
           const input = c.req.valid("json");
           const staff = c.get("user");
-          const existing = await ctx.db.select({ id: user.id }).from(user).where(eq(user.email, input.email));
-          if (existing.length > 0) throw conflict("A user with this email already exists");
-          const userId = randomUUID();
-          await ctx.db.transaction(async (tx) => {
-            await tx.insert(user).values({
-              id: userId,
-              name: input.name,
-              email: input.email,
-              emailVerified: true,
-              role: input.role,
-            });
-            await tx.insert(accountTable).values({
-              id: randomUUID(),
-              accountId: input.email,
-              providerId: "credential",
-              userId,
-              password: await hashPassword(input.password),
-            });
-            await writeAudit(tx, {
-              actor: staff,
-              action: "staff.invited",
-              entityType: "user",
-              entityId: userId,
-              after: { email: input.email, role: input.role },
-            });
+          const userId = await createStaffUser(ctx.db, {
+            name: input.name,
+            email: input.email,
+            password: input.password,
+            role: input.role,
+          });
+          await writeAudit(ctx.db, {
+            actor: staff,
+            action: "staff.invited",
+            entityType: "user",
+            entityId: userId,
+            after: { email: input.email, role: input.role },
           });
           return c.json(ok({ id: userId }), 201);
         },
