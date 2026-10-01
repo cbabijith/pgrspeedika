@@ -16,11 +16,13 @@ export function PincodeCheck() {
   const [value, setValue] = useState("");
   const [state, setState] = useState<{ served: boolean; area?: string } | null>(null);
   const [checking, setChecking] = useState(false);
-  const [dismissed, setDismissed] = useState(true);
+  // Render the banner on the server AND first paint (fresh visitors), so it
+  // never shifts the page after hydration. Returning visitors with a saved
+  // pincode collapse it right after mount — one small shift for them only.
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    // Show the banner until the visitor has chosen a pincode.
-    setDismissed(Boolean(pincode));
+    if (pincode) setDismissed(true);
   }, [pincode]);
 
   const zones = useQuery({

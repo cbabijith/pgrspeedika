@@ -33,3 +33,6 @@ apps/backend/uploads/
 .mimosa/
 # analysis artifacts
 graphify-out/
+
+# lighthouse reports (regenerated locally by apps/web/scripts/lighthouse-mobile.sh)
+lighthouse-reports/

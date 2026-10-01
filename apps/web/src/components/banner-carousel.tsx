@@ -38,6 +38,11 @@ export function BannerCarousel({ banners, lang }: { banners: BannerItem[]; lang:
             key={banner.id}
             src={banner.imageUrl}
             alt={lang === "en" ? banner.titleEn : banner.titleMl}
+            width={1200}
+            height={420}
+            decoding="async"
+            // The first slide is the LCP element — fetch it ahead of everything.
+            fetchPriority="high"
             className="h-full w-full object-cover"
           />
           {banner.badge ? (

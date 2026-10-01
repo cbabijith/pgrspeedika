@@ -1,12 +1,16 @@
 import { newHono } from "../lib/hono";
 import { zValidator } from "@hono/zod-validator";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { reviewInputSchema, wishlistToggleSchema } from "@pgrs/contracts";
+import { notificationPreferencesSchema, reviewInputSchema, wishlistToggleSchema } from "@pgrs/contracts";
 import { notifications, orderItems, orders, products, reviews, wishlists } from "@pgrs/db";
 import type { AppContext } from "../lib/app-context";
 import { badRequest, notFound, ok } from "../lib/errors";
 import { requireAuth } from "../lib/context";
 import { rateLimit } from "../lib/rate-limit";
+import {
+  getNotificationPreferences,
+  saveNotificationPreferences,
+} from "../services/notification-preferences";
 
 export function accountRoutes(ctx: AppContext) {
   return (
@@ -173,5 +177,35 @@ export function accountRoutes(ctx: AppContext) {
           .where(and(eq(notifications.userId, user.id), eq(notifications.channel, "inapp")));
         return c.json(ok({ read: true }));
       })
+
+      // ── Notification preferences ─────────────────────────────────────────
+      .get("/api/notifications/preferences", async (c) => {
+        const user = c.get("user");
+        return c.json(ok(await getNotificationPreferences(ctx.db, user.id)));
+      })
+      .put(
+        "/api/notifications/preferences",
+        zValidator("json", notificationPreferencesSchema, (result, c) => {
+          if (!result.success)
+            return c.json(
+              {
+                ok: false as const,
+                code: "VALIDATION_ERROR",
+                message: "Invalid preferences",
+                details: result.error.flatten().fieldErrors,
+              },
+              400,
+            );
+        }),
+        async (c) => {
+          const user = c.get("user");
+          try {
+            const prefs = await saveNotificationPreferences(ctx.db, user.id, c.req.valid("json"));
+            return c.json(ok(prefs));
+          } catch (err) {
+            throw badRequest(err instanceof Error ? err.message : "Could not save preferences");
+          }
+        },
+      )
   );
 }

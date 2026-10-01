@@ -286,11 +286,15 @@ export async function searchSuggest(db: Database, q: string) {
 }
 
 export async function homeFeed(db: Database) {
-  const activeBanners = await db
-    .select()
-    .from(banners)
-    .where(eq(banners.isActive, true))
-    .orderBy(asc(banners.sortOrder));
+  // Active banners inside their schedule window (startsAt/endsAt inclusive).
+  const now = new Date();
+  const activeBanners = (
+    await db.select().from(banners).where(eq(banners.isActive, true)).orderBy(asc(banners.sortOrder))
+  ).filter(
+    (b) =>
+      (b.startsAt == null || b.startsAt.getTime() <= now.getTime()) &&
+      (b.endsAt == null || b.endsAt.getTime() >= now.getTime()),
+  );
 
   const [freshRows, bestRows, seasonalRows] = await Promise.all([
     fetchProductRows(

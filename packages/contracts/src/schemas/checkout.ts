@@ -76,5 +76,7 @@ export type SlotAvailability = SlotDTO & {
   remaining: number;
   /** True once the cutoff has passed for this date. */
   cutoffPassed: boolean;
+  /** True on holiday/closed days configured by the shop. */
+  closed: boolean;
   bookable: boolean;
 };

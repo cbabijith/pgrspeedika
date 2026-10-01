@@ -2,7 +2,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createDb, schema } from "@pgrs/db";
 import { reserveStock, releaseStock, commitSale } from "../src/services/stock";
-import { bookSlot, releaseSlot, slotAvailabilityForDate, istTodayDateString } from "../src/services/slots";
+import {
+  bookSlot,
+  releaseSlot,
+  saveHolidayDates,
+  slotAvailabilityForDate,
+  istTodayDateString,
+} from "../src/services/slots";
 
 /**
  * Integration tests against a real Postgres (DATABASE_URL). They are skipped
@@ -168,6 +174,26 @@ dd("slot capacity (integration)", () => {
         await bookSlot(tx, slotId, date);
       }),
     ).rejects.toThrowError(/full|closed/i);
+  });
+
+  it("blocks booking on holiday/closed dates and recovers after removal", async () => {
+    const holiday = istTodayDateString(new Date(Date.now() + 7 * 86_400_000));
+    await saveHolidayDates(db!, [holiday]);
+
+    const availability = await slotAvailabilityForDate(db!, holiday);
+    const mine = availability.find((a) => a.id === slotId);
+    expect(mine?.closed).toBe(true);
+    expect(mine?.bookable).toBe(false);
+
+    await expect(
+      db!.transaction(async (tx) => {
+        await bookSlot(tx, slotId, holiday);
+      }),
+    ).rejects.toThrowError(/holiday|closed/i);
+
+    await saveHolidayDates(db!, []);
+    const reopened = await slotAvailabilityForDate(db!, holiday);
+    expect(reopened.find((a) => a.id === slotId)?.bookable).toBe(true);
   });
 
   it("releases a booking", async () => {

@@ -17,6 +17,8 @@ interface Banner {
   badge: string | null;
   sortOrder: number;
   isActive: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
 }
 
 export default function BannersPage() {
@@ -34,6 +36,8 @@ export default function BannersPage() {
     linkUrl: "/",
     badge: "",
     sortOrder: 10,
+    startsAt: "",
+    endsAt: "",
   });
 
   const create = useMutation({
@@ -49,6 +53,8 @@ export default function BannersPage() {
             linkUrl: form.linkUrl || null,
             badge: form.badge || null,
             sortOrder: form.sortOrder,
+            startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
+            endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null,
             isActive: true,
           } as never,
         }),
@@ -97,9 +103,26 @@ export default function BannersPage() {
         </Field>
         <Field label="Sort order">
           <Input
+            id="banner-sort"
             inputMode="numeric"
             value={form.sortOrder}
             onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) || 0 })}
+          />
+        </Field>
+        <Field label="Show from (optional)">
+          <Input
+            id="banner-starts"
+            type="datetime-local"
+            value={form.startsAt}
+            onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
+          />
+        </Field>
+        <Field label="Show until (optional)">
+          <Input
+            id="banner-ends"
+            type="datetime-local"
+            value={form.endsAt}
+            onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
           />
         </Field>
         <Button onClick={() => create.mutate()} loading={create.isPending}>
@@ -116,6 +139,11 @@ export default function BannersPage() {
                 <p className="text-sm font-bold text-ink">{b.titleEn}</p>
                 <p className="text-xs text-muted">
                   {b.titleMl} · /{b.linkUrl ?? ""} · order {b.sortOrder}
+                </p>
+                <p className="text-xs text-muted">
+                  {b.startsAt || b.endsAt
+                    ? `Schedule: ${b.startsAt ? new Date(b.startsAt).toLocaleString("en-IN") : "now"} → ${b.endsAt ? new Date(b.endsAt).toLocaleString("en-IN") : "ongoing"}`
+                    : "Always visible"}
                 </p>
               </div>
               <div className="flex items-center gap-1">

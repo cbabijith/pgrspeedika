@@ -146,11 +146,19 @@ idempotency keys for order/payment creation.
 
 - `pnpm test` — Vitest: INR formatting, GST-inclusive billing, coupon rules,
   weight-adjustment recomputation, mock + webhook signature verification; plus
-  integration tests (stock reservation, atomic slot capacity) that run against
-  the database in `.env.test` (skipped when unreachable).
+  integration tests (stock reservation, atomic slot capacity, holiday closure,
+  and a full **checkout pipeline test** — placement with server-verified
+  totals/coupon/reservation/outbox, idempotent replay, rejection of unserved
+  pincodes and below-minimum carts, packing with actual weights, cancellation
+  with stock/slot release) running against the database in `.env.test`
+  (skipped when unreachable).
 - `pnpm --filter web exec playwright test` — Playwright E2E: phone-OTP login,
   COD checkout end-to-end, admin packing an order with the customer verifying
   the adjusted bill. Requires `ENABLE_TEST_OTP=true` and the seeded owner.
+- `apps/web/scripts/lighthouse-mobile.sh` — Lighthouse **mobile** audit
+  (standard simulated 4G throttling) for the Phase 5 ≥90 performance gate.
+  Verified on the production build: **home 95 / product 98** performance,
+  accessibility 93/97, best-practices 96, SEO 100.
 
 ## Deployment notes
 

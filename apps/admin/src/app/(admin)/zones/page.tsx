@@ -61,6 +61,22 @@ export default function ZonesPage() {
     capacity: "40",
   });
 
+  const holidays = useQuery({
+    queryKey: ["admin-holidays"],
+    queryFn: () => unwrap<{ dates: string[] }>(api.api.admin.holidays.$get({ query: {} })),
+  });
+  const [holidayDate, setHolidayDate] = useState("");
+  const saveHolidays = useMutation({
+    mutationFn: async (dates: string[]) => {
+      return unwrap<{ dates: string[] }>(api.api.admin.holidays.$put({ json: { dates } }));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-holidays"] });
+      toast.success("Holidays updated — slots on those dates are closed");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const createZone = useMutation({
     mutationFn: async () => {
       await unwrap(
@@ -120,6 +136,7 @@ export default function ZonesPage() {
         <TabsList>
           <TabsTrigger value="zones">Delivery zones</TabsTrigger>
           <TabsTrigger value="slots">Slots</TabsTrigger>
+          <TabsTrigger value="holidays">Holidays</TabsTrigger>
         </TabsList>
 
         <TabsContent value="zones" className="space-y-4">
@@ -268,6 +285,57 @@ export default function ZonesPage() {
               </tbody>
             </table>
           </div>
+        </TabsContent>
+        <TabsContent value="holidays" className="space-y-4">
+          <Card className="p-5">
+            <h2 className="text-base font-bold text-ink">Holiday / closed days</h2>
+            <p className="mt-1 text-xs text-muted">
+              On these dates no slot can be booked and checkout shows the date as closed. Use it for shop
+              holidays and festival closures.
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <Field label="Add a closed date">
+                <Input
+                  type="date"
+                  value={holidayDate}
+                  onChange={(e) => setHolidayDate(e.target.value)}
+                  className="w-48"
+                />
+              </Field>
+              <Button
+                onClick={() => {
+                  if (!holidayDate) return;
+                  saveHolidays.mutate([...(holidays.data?.dates ?? []), holidayDate]);
+                  setHolidayDate("");
+                }}
+              >
+                <Plus className="h-4 w-4" aria-hidden /> Add
+              </Button>
+            </div>
+            <ul className="mt-4 flex flex-wrap gap-2">
+              {(holidays.data?.dates ?? []).map((d) => (
+                <li key={d}>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${d}`}
+                    onClick={() => saveHolidays.mutate((holidays.data?.dates ?? []).filter((x) => x !== d))}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-muted px-3 py-1.5 text-xs font-bold text-ink hover:border-danger hover:text-danger"
+                  >
+                    {new Date(`${d}T00:00:00+05:30`).toLocaleDateString("en-IN", {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                    ✕
+                  </button>
+                </li>
+              ))}
+              {(holidays.data?.dates ?? []).length === 0 ? (
+                <li className="text-sm text-muted">No closed dates configured.</li>
+              ) : null}
+            </ul>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

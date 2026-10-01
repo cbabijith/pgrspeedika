@@ -26,6 +26,7 @@ import type { AppContext } from "../../lib/app-context";
 import { badRequest, conflict, notFound, ok } from "../../lib/errors";
 import { requireStaff } from "../../lib/context";
 import { writeAudit } from "../../lib/audit";
+import { getHolidayDates, saveHolidayDates } from "../../services/slots";
 
 export function adminPlatformRoutes(ctx: AppContext) {
   return (
@@ -131,6 +132,37 @@ export function adminPlatformRoutes(ctx: AppContext) {
             .returning();
           if (!row) throw notFound("Slot not found");
           return c.json(ok(row));
+        },
+      )
+
+      // ── Holiday / closed days ──────────────────────────────────────────────
+      .get("/holidays", requireStaff(ctx, "delivery:manage"), async (c) => {
+        return c.json(ok({ dates: await getHolidayDates(ctx.db) }));
+      })
+      .put(
+        "/holidays",
+        requireStaff(ctx, "delivery:manage"),
+        zValidator(
+          "json",
+          z.object({ dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(200) }),
+          (result, c) => {
+            if (!result.success)
+              return c.json({ ok: false as const, code: "VALIDATION_ERROR", message: "Invalid dates" }, 400);
+          },
+        ),
+        async (c) => {
+          const actor = c.get("user");
+          const before = await getHolidayDates(ctx.db);
+          const dates = await saveHolidayDates(ctx.db, c.req.valid("json").dates);
+          await writeAudit(ctx.db, {
+            actor,
+            action: "delivery.holidays_updated",
+            entityType: "settings",
+            entityId: "delivery.holidays",
+            before: { dates: before },
+            after: { dates },
+          });
+          return c.json(ok({ dates }));
         },
       )
 

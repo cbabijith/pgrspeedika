@@ -31,13 +31,21 @@ export default async function HomePage() {
     serverFetch<Category[]>("/api/catalog/categories"),
   ]);
 
+  const firstBanner = feed?.banners?.[0]?.imageUrl;
+
   return (
-    <HomeContent
-      banners={feed?.banners ?? []}
-      categories={categories ?? []}
-      freshToday={feed?.freshToday ?? []}
-      bestSellers={feed?.bestSellers ?? []}
-      seasonal={feed?.seasonal ?? []}
-    />
+    <>
+      {firstBanner ? (
+        // Preload the hero banner — it is the LCP element on mobile.
+        <link rel="preload" as="image" href={firstBanner} fetchPriority="high" />
+      ) : null}
+      <HomeContent
+        banners={feed?.banners ?? []}
+        categories={categories ?? []}
+        freshToday={feed?.freshToday ?? []}
+        bestSellers={feed?.bestSellers ?? []}
+        seasonal={feed?.seasonal ?? []}
+      />
+    </>
   );
 }

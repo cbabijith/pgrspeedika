@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Star } from "lucide-react";
+import { z } from "zod";
 import { Badge, Button, Card, Field, Textarea, Input } from "@pgrs/ui";
 import { api, unwrap } from "@/lib/api";
 import { useSession } from "@/lib/hooks";
@@ -20,7 +22,14 @@ interface PublicReview {
   createdAt: string;
 }
 
-/** Product reviews: public list + signed-in submission (moderated). */
+const reviewFormSchema = z.object({
+  rating: z.number().int().min(1, "Pick a star rating").max(5),
+  title: z.string().max(120),
+  body: z.string().min(4, "Write a few words").max(2000),
+});
+type ReviewFormValues = z.infer<typeof reviewFormSchema>;
+
+/** Product reviews: public list + signed-in submission (React Hook Form + Zod). */
 export function ReviewSection({ productId, productSlug }: { productId: string; productSlug: string }) {
   const queryClient = useQueryClient();
   const session = useSession();
@@ -36,21 +45,22 @@ export function ReviewSection({ productId, productSlug }: { productId: string; p
       ),
   });
 
-  const [rating, setRating] = useState(5);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const form = useForm<ReviewFormValues>({
+    resolver: zodResolver(reviewFormSchema),
+    defaultValues: { rating: 5, title: "", body: "" },
+  });
+  const rating = form.watch("rating");
 
   const submit = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: ReviewFormValues) => {
       if (!user) throw new Error(t("Please log in to review", "റിവ്യൂ ചെയ്യാൻ ലോഗിൻ ചെയ്യുക"));
-      if (body.trim().length < 4) throw new Error(t("Write a few words", "കുറച്ച് വാക്കുകൾ എഴുതുക"));
       await unwrap(
         api.api.reviews.$post({
           json: {
             productId,
-            rating,
-            title: title || null,
-            body,
+            rating: values.rating,
+            title: values.title || null,
+            body: values.body,
           } as never,
         }),
       );
@@ -59,8 +69,7 @@ export function ReviewSection({ productId, productSlug }: { productId: string; p
       toast.success(
         t("Thank you! Your review is pending approval.", "നന്ദി! റിവ്യൂ അംഗീകാരത്തിന് കാത്തിരിക്കുന്നു."),
       );
-      setTitle("");
-      setBody("");
+      form.reset({ rating: 5, title: "", body: "" });
       queryClient.invalidateQueries({ queryKey: ["product-reviews", productSlug] });
     },
     onError: (err) => toast.error(err.message),
@@ -105,10 +114,8 @@ export function ReviewSection({ productId, productSlug }: { productId: string; p
 
       <form
         className="space-y-3 border-t border-line pt-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit.mutate();
-        }}
+        onSubmit={form.handleSubmit((values) => submit.mutate(values))}
+        noValidate
       >
         <p className="text-sm font-bold text-ink">{t("Write a review", "റിവ്യൂ എഴുതുക")}</p>
         <fieldset>
@@ -120,7 +127,7 @@ export function ReviewSection({ productId, productSlug }: { productId: string; p
                 type="button"
                 aria-label={`${n} star${n > 1 ? "s" : ""}`}
                 aria-pressed={rating === n}
-                onClick={() => setRating(n)}
+                onClick={() => form.setValue("rating", n, { shouldValidate: true })}
                 className="p-0.5"
               >
                 <Star
@@ -131,11 +138,14 @@ export function ReviewSection({ productId, productSlug }: { productId: string; p
             ))}
           </div>
         </fieldset>
-        <Field label={t("Title (optional)", "തലക്കെട്ട് (ഓപ്ഷണൽ)")}>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
+        <Field
+          label={t("Title (optional)", "തലക്കെട്ട് (ഓപ്ഷണൽ)")}
+          error={form.formState.errors.title?.message}
+        >
+          <Input id="review-title" maxLength={120} {...form.register("title")} />
         </Field>
-        <Field label={t("Your review", "നിങ്ങളുടെ അഭിപ്രായം")}>
-          <Textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} />
+        <Field label={t("Your review", "നിങ്ങളുടെ അഭിപ്രായം")} error={form.formState.errors.body?.message}>
+          <Textarea id="review-body" maxLength={2000} {...form.register("body")} />
         </Field>
         <Button type="submit" loading={submit.isPending}>
           {t("Submit review", "റിവ്യൂ സമർപ്പിക്കുക")}

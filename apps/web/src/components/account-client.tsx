@@ -2,11 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Heart, Package, User } from "lucide-react";
-import { Badge, Button, Card, EmptyState, Money, Skeleton } from "@pgrs/ui";
+import { Badge, Button, Card, EmptyState, Skeleton } from "@pgrs/ui";
 import { api, unwrap } from "@/lib/api";
 import { useSession } from "@/lib/hooks";
 import { useUIStore } from "@/store/ui";
 import { authClient } from "@/lib/auth";
+import { NotificationPreferencesCard } from "./notification-preferences";
 
 /** Account home: profile, addresses, quick links. */
 export function AccountClient() {
@@ -119,9 +120,8 @@ export function AccountClient() {
           </ul>
         )}
       </Card>
-      <p className="hidden">
-        <Money paise={0} />
-      </p>
+
+      <NotificationPreferencesCard />
     </div>
   );
 }

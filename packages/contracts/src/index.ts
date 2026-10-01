@@ -3,6 +3,7 @@ export * from "./permissions";
 export * from "./money";
 export * from "./weight";
 export * from "./schemas/common";
+export * from "./schemas/notification-preferences";
 export * from "./schemas/catalog";
 export * from "./schemas/cart";
 export * from "./schemas/checkout";

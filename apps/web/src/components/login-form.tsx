@@ -2,37 +2,47 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Smartphone } from "lucide-react";
+import { z } from "zod";
 import { Alert, Button, Card, Field, Input } from "@pgrs/ui";
-import { normalizePhone } from "@pgrs/contracts";
 import { authClient } from "@/lib/auth";
 import { useUIStore } from "@/store/ui";
 
-/** Phone OTP login. Works for new and returning customers. */
+const phoneFormSchema = z.object({
+  phone: z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit Indian mobile number"),
+});
+type PhoneForm = z.infer<typeof phoneFormSchema>;
+
+const otpFormSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
+});
+type OtpForm = z.infer<typeof otpFormSchema>;
+
+/** Phone OTP login (React Hook Form + Zod). New and returning customers. */
 export function LoginForm({ next }: { next?: string }) {
   const router = useRouter();
   const lang = useUIStore((s) => s.lang);
   const t = (en: string, ml: string) => (lang === "en" ? en : ml);
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
   const [stage, setStage] = useState<"phone" | "otp">("phone");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState("");
 
-  const normalized = (() => {
-    try {
-      return normalizePhone(phone);
-    } catch {
-      return null;
-    }
-  })();
+  const phoneForm = useForm<PhoneForm>({
+    resolver: zodResolver(phoneFormSchema),
+    defaultValues: { phone: "" },
+  });
 
-  async function sendOtp() {
-    if (!normalized) {
-      setError(t("Enter a valid 10-digit Indian mobile number", "സാധുവായ 10 അക്ക മൊബൈൽ നമ്പർ നൽകുക"));
-      return;
-    }
+  const otpForm = useForm<OtpForm>({
+    resolver: zodResolver(otpFormSchema),
+    defaultValues: { code: "" },
+  });
+
+  async function sendOtp(values: PhoneForm) {
+    const normalized = `+91${values.phone}`;
     setPending(true);
     setError(null);
     const { error: err } = await authClient.phoneNumber.sendOtp({ phoneNumber: normalized });
@@ -41,6 +51,7 @@ export function LoginForm({ next }: { next?: string }) {
       setError(err.message ?? t("Could not send the code", "കോഡ് അയയ്ക്കാനായില്ല"));
       return;
     }
+    setPhoneNumber(normalized);
     setStage("otp");
     toast.info(
       t(
@@ -50,18 +61,13 @@ export function LoginForm({ next }: { next?: string }) {
     );
   }
 
-  async function verify() {
-    if (!normalized) return;
-    if (!/^\d{6}$/.test(code)) {
-      setError(t("Enter the 6-digit code", "6 അക്ക കോഡ് നൽകുക"));
-      return;
-    }
+  async function verify(values: OtpForm) {
     setPending(true);
     setError(null);
-    const { error: err } = await authClient.phoneNumber.verify(
-      { phoneNumber: normalized, code },
-      { onSuccess: () => undefined },
-    );
+    const { error: err } = await authClient.phoneNumber.verify({
+      phoneNumber,
+      code: values.code,
+    });
     setPending(false);
     if (err) {
       setError(err.message ?? t("Invalid code", "തെറ്റായ കോഡ്"));
@@ -89,14 +95,12 @@ export function LoginForm({ next }: { next?: string }) {
       </div>
 
       {stage === "phone" ? (
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void sendOtp();
-          }}
-        >
-          <Field label={t("Mobile number", "മൊബൈൽ നമ്പർ")} htmlFor="phone" error={error ?? undefined}>
+        <form className="space-y-4" onSubmit={phoneForm.handleSubmit(sendOtp)} noValidate>
+          <Field
+            label={t("Mobile number", "മൊബൈൽ നമ്പർ")}
+            htmlFor="phone"
+            error={error ?? phoneForm.formState.errors.phone?.message}
+          >
             <div className="flex items-center gap-2">
               <span className="rounded-xl bg-surface-muted px-3 py-2.5 text-sm font-bold text-muted">
                 +91
@@ -106,8 +110,8 @@ export function LoginForm({ next }: { next?: string }) {
                 inputMode="numeric"
                 autoComplete="tel-national"
                 placeholder="98765 43210"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                aria-invalid={phoneForm.formState.isSubmitted && Boolean(phoneForm.formState.errors.phone)}
+                {...phoneForm.register("phone")}
               />
             </div>
           </Field>
@@ -116,23 +120,21 @@ export function LoginForm({ next }: { next?: string }) {
           </Button>
         </form>
       ) : (
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void verify();
-          }}
-        >
-          <Alert tone="info">{t(`Code sent to +91 ${phone}`, `+91 ${phone} ലേക്ക് കോഡ് അയച്ചു`)}</Alert>
-          <Field label={t("6-digit code", "6 അക്ക കോഡ്")} htmlFor="otp" error={error ?? undefined}>
+        <form className="space-y-4" onSubmit={otpForm.handleSubmit(verify)} noValidate>
+          <Alert tone="info">{t(`Code sent to ${phoneNumber}`, `${phoneNumber} ലേക്ക് കോഡ് അയച്ചു`)}</Alert>
+          <Field
+            label={t("6-digit code", "6 അക്ക കോഡ്")}
+            htmlFor="otp"
+            error={error ?? otpForm.formState.errors.code?.message}
+          >
             <Input
               id="otp"
               inputMode="numeric"
               autoComplete="one-time-code"
               placeholder="••••••"
               className="text-center text-xl tracking-[0.5em]"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              aria-invalid={otpForm.formState.isSubmitted && Boolean(otpForm.formState.errors.code)}
+              {...otpForm.register("code")}
             />
           </Field>
           <Button type="submit" size="lg" className="w-full" loading={pending}>
@@ -143,7 +145,7 @@ export function LoginForm({ next }: { next?: string }) {
             className="w-full text-center text-xs font-semibold text-primary-700 underline"
             onClick={() => {
               setStage("phone");
-              setCode("");
+              otpForm.reset();
               setError(null);
             }}
           >

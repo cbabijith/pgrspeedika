@@ -6,6 +6,7 @@ import { notifications, orders, settings, user } from "@pgrs/db";
 import type { AppContext } from "../lib/app-context";
 import { log } from "../lib/app-context";
 import { childLogger } from "../lib/logger";
+import { allowsMessage, getNotificationPreferences } from "../services/notification-preferences";
 
 type Handler<K extends EventName> = (payload: EventPayloadMap[K], ctx: AppContext) => Promise<void>;
 type AnyHandler = (payload: never, ctx: AppContext) => Promise<void>;
@@ -16,7 +17,9 @@ function register<K extends EventName>(name: K, handler: Handler<K>) {
   handlers.set(name, handler as unknown as AnyHandler);
 }
 
-/** Deduped in-app notification insert (handlers must stay idempotent). */
+/** Deduped in-app notification insert (handlers must stay idempotent).
+ *  `kind` gates the message on the recipient's notification preferences;
+ *  omit it for staff/system messages, which always go out. */
 async function pushInApp(
   ctx: AppContext,
   input: {
@@ -26,8 +29,13 @@ async function pushInApp(
     eventName: string;
     relatedType?: string;
     relatedId?: string;
+    kind?: "order" | "offer";
   },
 ) {
+  if (input.userId && input.kind) {
+    const prefs = await getNotificationPreferences(ctx.db, input.userId);
+    if (!allowsMessage(prefs, input.kind, "inapp")) return;
+  }
   if (input.userId) {
     const existing = await ctx.db
       .select({ id: notifications.id })
@@ -55,15 +63,25 @@ async function pushInApp(
   });
 }
 
-/** Best-effort outbound SMS/WhatsApp through the configured provider. */
+/** Best-effort outbound SMS/WhatsApp through the configured provider.
+ *  Customer sends pass through their notification preferences. */
 async function sendSms(
   ctx: AppContext,
-  to: string,
-  title: string,
-  body: string,
-  eventName: string,
-  relatedId?: string,
+  input: {
+    to: string;
+    userId?: string | null;
+    kind?: "order" | "offer";
+    title: string;
+    body: string;
+    eventName: string;
+    relatedId?: string;
+  },
 ) {
+  const { to, title, body, eventName, relatedId } = input;
+  if (input.userId && input.kind) {
+    const prefs = await getNotificationPreferences(ctx.db, input.userId);
+    if (!allowsMessage(prefs, input.kind, "sms")) return;
+  }
   try {
     const result = await ctx.notifier.send({
       channel: "sms",
@@ -144,18 +162,19 @@ register(EVENTS.orderPlaced, async (payload, ctx) => {
   }
   const template = await customerTemplate(ctx, "orderPlaced");
   if (template) {
-    await sendSms(
-      ctx,
-      payload.customerPhone,
-      "Order received",
-      render(template, {
+    await sendSms(ctx, {
+      to: payload.customerPhone,
+      userId: payload.userId,
+      kind: "order",
+      title: "Order received",
+      body: render(template, {
         orderNumber: payload.orderNumber,
         total: formatINR(payload.grandTotalPaise),
         slot: payload.slotDate,
       }),
-      EVENTS.orderPlaced,
-      payload.orderId,
-    );
+      eventName: EVENTS.orderPlaced,
+      relatedId: payload.orderId,
+    });
   }
 });
 
@@ -163,6 +182,7 @@ register(EVENTS.orderConfirmed, async (payload, ctx) => {
   if (payload.userId) {
     await pushInApp(ctx, {
       userId: payload.userId,
+      kind: "order",
       title: `Order ${payload.orderNumber} confirmed`,
       body: payload.note ?? "Your order is confirmed and will be packed fresh.",
       eventName: EVENTS.orderConfirmed,
@@ -180,6 +200,7 @@ register(EVENTS.orderPacked, async (payload, ctx) => {
   if (payload.userId) {
     await pushInApp(ctx, {
       userId: payload.userId,
+      kind: "order",
       title: `Order ${payload.orderNumber} packed`,
       body: parts.join(" "),
       eventName: EVENTS.orderPacked,
@@ -188,14 +209,15 @@ register(EVENTS.orderPacked, async (payload, ctx) => {
     });
   }
   if (payload.customerPhone) {
-    await sendSms(
-      ctx,
-      payload.customerPhone,
-      "Order packed",
-      parts.join(" "),
-      EVENTS.orderPacked,
-      payload.orderId,
-    );
+    await sendSms(ctx, {
+      to: payload.customerPhone,
+      userId: payload.userId,
+      kind: "order",
+      title: "Order packed",
+      body: parts.join(" "),
+      eventName: EVENTS.orderPacked,
+      relatedId: payload.orderId,
+    });
   }
 });
 
@@ -203,6 +225,7 @@ register(EVENTS.orderOutForDelivery, async (payload, ctx) => {
   if (payload.userId) {
     await pushInApp(ctx, {
       userId: payload.userId,
+      kind: "order",
       title: `Order ${payload.orderNumber} out for delivery`,
       body: "Your order is on the way!",
       eventName: EVENTS.orderOutForDelivery,
@@ -212,17 +235,18 @@ register(EVENTS.orderOutForDelivery, async (payload, ctx) => {
   }
   const template = await customerTemplate(ctx, "outForDelivery");
   if (template && payload.customerPhone) {
-    await sendSms(
-      ctx,
-      payload.customerPhone,
-      "Out for delivery",
-      render(template, {
+    await sendSms(ctx, {
+      to: payload.customerPhone,
+      userId: payload.userId,
+      kind: "order",
+      title: "Out for delivery",
+      body: render(template, {
         orderNumber: payload.orderNumber,
         total: formatINR(payload.grandTotalPaise),
       }),
-      EVENTS.orderOutForDelivery,
-      payload.orderId,
-    );
+      eventName: EVENTS.orderOutForDelivery,
+      relatedId: payload.orderId,
+    });
   }
 });
 
@@ -230,6 +254,7 @@ register(EVENTS.orderDelivered, async (payload, ctx) => {
   if (payload.userId) {
     await pushInApp(ctx, {
       userId: payload.userId,
+      kind: "order",
       title: `Order ${payload.orderNumber} delivered`,
       body: "Thank you for shopping at PGRS Peedika!",
       eventName: EVENTS.orderDelivered,
@@ -239,14 +264,15 @@ register(EVENTS.orderDelivered, async (payload, ctx) => {
   }
   const template = await customerTemplate(ctx, "delivered");
   if (template && payload.customerPhone) {
-    await sendSms(
-      ctx,
-      payload.customerPhone,
-      "Delivered",
-      render(template, { orderNumber: payload.orderNumber, total: formatINR(payload.grandTotalPaise) }),
-      EVENTS.orderDelivered,
-      payload.orderId,
-    );
+    await sendSms(ctx, {
+      to: payload.customerPhone,
+      userId: payload.userId,
+      kind: "order",
+      title: "Delivered",
+      body: render(template, { orderNumber: payload.orderNumber, total: formatINR(payload.grandTotalPaise) }),
+      eventName: EVENTS.orderDelivered,
+      relatedId: payload.orderId,
+    });
   }
 });
 
@@ -254,6 +280,7 @@ register(EVENTS.orderCancelled, async (payload, ctx) => {
   if (payload.userId) {
     await pushInApp(ctx, {
       userId: payload.userId,
+      kind: "order",
       title: `Order ${payload.orderNumber} cancelled`,
       body: payload.note ?? "Your order was cancelled.",
       eventName: EVENTS.orderCancelled,
@@ -271,6 +298,7 @@ register(EVENTS.paymentCaptured, async (payload, ctx) => {
   if (order?.userId) {
     await pushInApp(ctx, {
       userId: order.userId,
+      kind: "order",
       title: `Payment received for ${payload.orderNumber}`,
       body: `${formatINR(payload.amountPaise)} paid via ${payload.method}.`,
       eventName: EVENTS.paymentCaptured,
@@ -288,6 +316,7 @@ register(EVENTS.paymentFailed, async (payload, ctx) => {
   if (order?.userId) {
     await pushInApp(ctx, {
       userId: order.userId,
+      kind: "order",
       title: `Payment failed for ${payload.orderNumber}`,
       body: "The payment did not go through. You can retry from your orders.",
       eventName: EVENTS.paymentFailed,
@@ -301,6 +330,7 @@ register(EVENTS.refundIssued, async (payload, ctx) => {
   if (payload.userId) {
     await pushInApp(ctx, {
       userId: payload.userId,
+      kind: "order",
       title: `Refund for ${payload.orderNumber}`,
       body: `${formatINR(payload.amountPaise)} refund initiated (${payload.reason}).`,
       eventName: EVENTS.refundIssued,

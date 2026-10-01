@@ -1,10 +1,32 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@pgrs/db";
-import { deliverySlots, slotBookings } from "@pgrs/db";
+import { deliverySlots, settings, slotBookings } from "@pgrs/db";
 import type { SlotAvailability } from "@pgrs/contracts";
 import { notFound, slotUnavailable } from "../lib/errors";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+type DbOrTx = Database | Tx;
+
+const HOLIDAYS_KEY = "delivery.holidays";
+
+/** Shop holiday/closed dates (YYYY-MM-DD) configured by the owner. */
+export async function getHolidayDates(db: DbOrTx): Promise<string[]> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, HOLIDAYS_KEY));
+  const value = row?.value as { dates?: unknown } | undefined;
+  return Array.isArray(value?.dates) ? (value!.dates as string[]) : [];
+}
+
+export async function saveHolidayDates(db: Database, dates: string[]): Promise<string[]> {
+  const unique = [...new Set(dates.filter(isValidDateString))].sort();
+  await db
+    .insert(settings)
+    .values({ key: HOLIDAYS_KEY, value: { dates: unique } })
+    .onConflictDoUpdate({
+      target: settings.key,
+      set: { value: { dates: unique }, updatedAt: new Date() },
+    });
+  return unique;
+}
 
 /** Today's date string (YYYY-MM-DD) in Asia/Kolkata. */
 export function istTodayDateString(now = new Date()): string {
@@ -32,8 +54,9 @@ function istMinutesNow(now = new Date()): number {
 }
 
 /**
- * Slot availability for a date (bookable = capacity left AND cutoff not passed).
- * Slots from the past part of the day are not bookable for today.
+ * Slot availability for a date. A slot is bookable when the date is not a
+ * holiday, capacity remains, the cutoff has not passed and the date is not
+ * in the past.
  */
 export async function slotAvailabilityForDate(
   db: Database,
@@ -42,6 +65,8 @@ export async function slotAvailabilityForDate(
 ): Promise<SlotAvailability[]> {
   const slots = await db.select().from(deliverySlots).where(eq(deliverySlots.isActive, true));
   const bookings = await db.select().from(slotBookings).where(eq(slotBookings.bookingDate, date));
+  const holidays = await getHolidayDates(db);
+  const closed = holidays.includes(date);
   const minutesNow = istMinutesNow(now);
   const today = istTodayDateString(now);
 
@@ -63,7 +88,8 @@ export async function slotAvailabilityForDate(
         date,
         remaining,
         cutoffPassed,
-        bookable: slot.isActive && remaining > 0 && !cutoffPassed && date >= today,
+        closed,
+        bookable: slot.isActive && remaining > 0 && !cutoffPassed && !closed && date >= today,
       };
     });
 }
@@ -76,6 +102,9 @@ export async function bookSlot(tx: Tx, slotId: string, date: string, now = new D
   const [slot] = await tx.select().from(deliverySlots).where(eq(deliverySlots.id, slotId));
   if (!slot || !slot.isActive) throw notFound("Delivery slot not found");
   if (date < istTodayDateString(now)) throw slotUnavailable("This delivery date is in the past");
+  if ((await getHolidayDates(tx)).includes(date)) {
+    throw slotUnavailable("The shop is closed on this date (holiday)");
+  }
 
   const availability = await slotAvailabilityForDateUsingTx(tx, slot, date, now);
   if (!availability.bookable) {
@@ -118,10 +147,12 @@ async function slotAvailabilityForDateUsingTx(
   const today = istTodayDateString(now);
   const cutoffPassed = date <= today && slot.startMinutes - slot.cutoffMinutes <= minutesNow;
   const remaining = Math.max(0, slot.capacity - booked);
+  const closed = (await getHolidayDates(tx)).includes(date);
   return {
     cutoffPassed,
+    closed,
     remaining,
-    bookable: slot.isActive && remaining > 0 && !cutoffPassed && date >= today,
+    bookable: slot.isActive && remaining > 0 && !cutoffPassed && !closed && date >= today,
   };
 }
 

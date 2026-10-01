@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm, type UseFormReturn } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Banknote, Check, CreditCard, MapPin, Plus } from "lucide-react";
+import { z } from "zod";
 import { Alert, Badge, Button, Card, Field, Input, Money, Skeleton, Textarea } from "@pgrs/ui";
 import { formatINR, formatMinutes, type Address, type SlotAvailability } from "@pgrs/contracts";
 import { api, unwrap } from "@/lib/api";
@@ -13,7 +16,28 @@ import { useUIStore } from "@/store/ui";
 
 type PaymentMethod = "cod" | "razorpay";
 
-/** Full checkout: address, slot, payment, then place the order. */
+const newAddressSchema = z.object({
+  label: z.string().min(1, "Label is required").max(40),
+  contactName: z.string().min(2, "Contact name is required").max(80),
+  contactPhone: z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number"),
+  line1: z.string().min(4, "House / street is required").max(200),
+  landmark: z.string().max(120),
+  pincode: z.string().regex(/^[1-9]\d{5}$/, "We serve 670001, 670007, 670012, 671314"),
+  city: z.string().min(2).max(60),
+});
+type NewAddressValues = z.infer<typeof newAddressSchema>;
+
+const newAddressDefaults: NewAddressValues = {
+  label: "Home",
+  contactName: "",
+  contactPhone: "",
+  line1: "",
+  landmark: "",
+  pincode: "",
+  city: "Kannur",
+};
+
+/** Full checkout: address (React Hook Form + Zod), slot, payment, order. */
 export function CheckoutClient() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -38,15 +62,10 @@ export function CheckoutClient() {
 
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [showNewAddress, setShowNewAddress] = useState(false);
-  const [newAddress, setNewAddress] = useState({
-    label: "Home",
-    contactName: "",
-    contactPhone: "",
-    line1: "",
-    landmark: "",
-    pincode: "",
-    city: "Kannur",
-    isDefault: true,
+  const newAddressForm = useForm<NewAddressValues>({
+    resolver: zodResolver(newAddressSchema),
+    mode: "onChange",
+    defaultValues: newAddressDefaults,
   });
   const [slotId, setSlotId] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("cod");
@@ -74,11 +93,7 @@ export function CheckoutClient() {
 
   const totals = cart?.totals;
   const minNotMet = totals?.minOrderPaise != null && totals.subtotalPaise < totals.minOrderPaise;
-  const newAddressValid =
-    newAddress.contactName.trim().length >= 2 &&
-    /^\d{10}$/.test(newAddress.contactPhone.replace(/\D/g, "")) &&
-    newAddress.line1.trim().length >= 4 &&
-    /^[1-9]\d{5}$/.test(newAddress.pincode);
+  const newAddressValid = newAddressForm.formState.isValid;
   const canPlace =
     Boolean(user) &&
     (Boolean(selectedAddressId) || (showNewAddress && newAddressValid)) &&
@@ -93,6 +108,33 @@ export function CheckoutClient() {
     setPlacing(true);
     try {
       // New addresses travel inline; the backend validates + persists them.
+      let payloadAddress: { address: Record<string, unknown> } | { addressId: string | undefined };
+      if (showNewAddress) {
+        // Validate through RHF before sending; the backend re-validates anyway.
+        const values = await newAddressForm.trigger();
+        if (!values) {
+          toast.error(t("Please complete the delivery address", "ഡെലിവറി വിലാസം പൂർത്തിയാക്കുക"));
+          setPlacing(false);
+          return;
+        }
+        const v = newAddressForm.getValues();
+        payloadAddress = {
+          address: {
+            label: v.label,
+            contactName: v.contactName,
+            contactPhone: `+91${v.contactPhone.replace(/\D/g, "")}`,
+            line1: v.line1,
+            line2: null,
+            landmark: v.landmark || null,
+            pincode: v.pincode,
+            city: v.city,
+            isDefault: true,
+          },
+        };
+      } else {
+        payloadAddress = { addressId: selectedAddressId ?? undefined };
+      }
+
       const result = await unwrap<{
         orderId: string;
         orderNumber: string;
@@ -108,14 +150,7 @@ export function CheckoutClient() {
       }>(
         api.api.checkout.order.$post({
           json: {
-            ...(showNewAddress
-              ? {
-                  address: {
-                    ...newAddress,
-                    contactPhone: `+91${newAddress.contactPhone.replace(/\D/g, "")}`,
-                  },
-                }
-              : { addressId: selectedAddressId ?? undefined }),
+            ...payloadAddress,
             slotId,
             slotDate: slots.data?.find((s) => s.id === slotId)?.date ?? "",
             paymentMethod: payment,
@@ -226,13 +261,7 @@ export function CheckoutClient() {
                 <Plus className="h-4 w-4" aria-hidden />
                 {t("Add a new address", "പുതിയ വിലാസം ചേർക്കുക")}
               </label>
-              {showNewAddress ? (
-                <NewAddressForm
-                  lang={lang}
-                  form={newAddress}
-                  setForm={(next) => setNewAddress((prev) => ({ ...prev, ...next }))}
-                />
-              ) : null}
+              {showNewAddress ? <NewAddressForm lang={lang} form={newAddressForm} /> : null}
             </div>
           )}
         </Card>
@@ -276,7 +305,13 @@ export function CheckoutClient() {
                         : t("Available", "ലഭ്യം")}
                     </Badge>
                   ) : (
-                    <Badge tone="red">{s.cutoffPassed ? t("Closed", "അടച്ചു") : t("Full", "നിറഞ്ഞു")}</Badge>
+                    <Badge tone="red">
+                      {s.closed
+                        ? t("Holiday — shop closed", "അവധി — കട അടച്ചിരിക്കുന്നു")
+                        : s.cutoffPassed
+                          ? t("Closed", "അടച്ചു")
+                          : t("Full", "നിറഞ്ഞു")}
+                    </Badge>
                   )}
                 </label>
               ))}
@@ -433,55 +468,35 @@ function PaymentOption({
   );
 }
 
-function NewAddressForm({
-  lang,
-  form,
-  setForm,
-}: {
-  lang: "en" | "ml";
-  form: {
-    label: string;
-    contactName: string;
-    contactPhone: string;
-    line1: string;
-    landmark: string;
-    pincode: string;
-    city: string;
-    isDefault: boolean;
-  };
-  setForm: (next: Partial<typeof form>) => void;
-}) {
+function NewAddressForm({ lang, form }: { lang: "en" | "ml"; form: UseFormReturn<NewAddressValues> }) {
   const t = (en: string, ml: string) => (lang === "en" ? en : ml);
+  const errors = form.formState.errors;
 
   return (
     <Card className="space-y-3 p-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label={t("Label", "ലേബൽ")}>
-          <Input value={form.label} onChange={(e) => setForm({ label: e.target.value })} />
+        <Field label={t("Label", "ലേബൽ")} error={errors.label?.message}>
+          <Input id="na-label" {...form.register("label")} />
         </Field>
-        <Field label={t("Contact name", "ബന്ധപ്പെടാനുള്ള പേര്")}>
-          <Input value={form.contactName} onChange={(e) => setForm({ contactName: e.target.value })} />
+        <Field label={t("Contact name", "ബന്ധപ്പെടാനുള്ള പേര്")} error={errors.contactName?.message}>
+          <Input id="na-contact" {...form.register("contactName")} />
         </Field>
-        <Field label={t("Phone", "ഫോൺ")}>
-          <Input
-            inputMode="numeric"
-            value={form.contactPhone}
-            onChange={(e) => setForm({ contactPhone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
-          />
+        <Field label={t("Phone", "ഫോൺ")} error={errors.contactPhone?.message}>
+          <Input id="na-phone" inputMode="numeric" {...form.register("contactPhone")} />
         </Field>
-        <Field label={t("Pincode", "പിൻകോഡ്")} hint="We serve 670001, 670007, 670012, 671314">
-          <Input
-            inputMode="numeric"
-            value={form.pincode}
-            onChange={(e) => setForm({ pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
-          />
+        <Field
+          label={t("Pincode", "പിൻകോഡ്")}
+          hint="We serve 670001, 670007, 670012, 671314"
+          error={errors.pincode?.message}
+        >
+          <Input id="na-pincode" inputMode="numeric" {...form.register("pincode")} />
         </Field>
       </div>
-      <Field label={t("House / street", "വീട് / തെരുവ്")}>
-        <Textarea value={form.line1} onChange={(e) => setForm({ line1: e.target.value })} />
+      <Field label={t("House / street", "വീട് / തെരുവ്")} error={errors.line1?.message}>
+        <Textarea id="na-line1" {...form.register("line1")} />
       </Field>
-      <Field label={t("Landmark", "ലാൻഡ്മാർക്ക്")}>
-        <Input value={form.landmark} onChange={(e) => setForm({ landmark: e.target.value })} />
+      <Field label={t("Landmark", "ലാൻഡ്മാർക്ക്")} error={errors.landmark?.message}>
+        <Input id="na-landmark" {...form.register("landmark")} />
       </Field>
       <p className="text-xs text-muted">
         {t(
