@@ -87,6 +87,9 @@ jobs:
       DATABASE_URL: postgres://pgrs:pgrs@localhost:5432/pgrs_peedika_e2e
       BETTER_AUTH_SECRET: ci-secret-ci-secret-ci-secret-ci-secret
       BETTER_AUTH_URL: http://localhost:4000
+      SEED_OWNER_EMAIL: owner@pgrspeedika.example
+      # E2E specs need the OTP helper endpoint (never enable in production).
+      ENABLE_TEST_OTP: "true"
       CLOUD_ENV: ci
 
     steps:
@@ -108,7 +111,11 @@ jobs:
       - name: Apply migrations and seed
         run: |
           pnpm db:migrate
-          pnpm db:seed
+          # Throwaway owner password for the ephemeral CI database; exported
+          # for the e2e step via GITHUB_ENV so no credential literal is stored.
+          PW="ci-$(date +%s)-owner"
+          echo "SEED_OWNER_PASSWORD=$PW" >> "$GITHUB_ENV"
+          SEED_OWNER_PASSWORD="$PW" pnpm db:seed
 
       - name: Build and run E2E
         run: pnpm --filter web test:e2e:ci
