@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, type UseFormReturn } from "react-hook-form";
@@ -53,10 +53,37 @@ export function CheckoutClient() {
     queryFn: () => unwrap<Address[]>(api.api.account.addresses.$get()),
   });
 
-  const slots = useQuery({
-    queryKey: ["slots"],
-    queryFn: () => unwrap<SlotAvailability[]>(api.api.delivery.slots.$get({ query: {} })),
+  // Availability for today AND tomorrow: after the last cutoff of the day,
+  // today has no bookable slots and the next bookable date is tomorrow.
+  const slotDates = useMemo(() => {
+    const today = new Date();
+    const tomorrow = new Date(today.getTime() + 86_400_000);
+    const fmt = (d: Date) =>
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(d);
+    return [fmt(today), fmt(tomorrow)] as const;
+  }, []);
+
+  const slotsToday = useQuery({
+    queryKey: ["slots", slotDates[0]],
+    queryFn: () => unwrap<SlotAvailability[]>(api.api.delivery.slots.$get({ query: { date: slotDates[0] } })),
   });
+  const slotsTomorrow = useQuery({
+    queryKey: ["slots", slotDates[1]],
+    queryFn: () => unwrap<SlotAvailability[]>(api.api.delivery.slots.$get({ query: { date: slotDates[1] } })),
+  });
+  const slotOptions: Array<SlotAvailability & { dayLabel: string }> = useMemo(() => {
+    const label = (date: string, idx: number) =>
+      date === slotDates[0] ? t("Today", "ഇന്ന്") : idx === 1 ? t("Tomorrow", "നാളെ") : date;
+    return [
+      ...(slotsToday.data ?? []).map((s) => ({ ...s, dayLabel: label(s.date, 0) })),
+      ...(slotsTomorrow.data ?? []).map((s) => ({ ...s, dayLabel: label(s.date, 1) })),
+    ];
+  }, [slotsToday.data, slotsTomorrow.data, slotDates, t]);
 
   const { cart } = useCart(pincode);
 
@@ -68,6 +95,7 @@ export function CheckoutClient() {
     defaultValues: newAddressDefaults,
   });
   const [slotId, setSlotId] = useState<string | null>(null);
+  const [slotDate, setSlotDate] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("cod");
   const [placing, setPlacing] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState("");
@@ -86,14 +114,25 @@ export function CheckoutClient() {
 
   useEffect(() => {
     if (!slotId) {
-      const first = slots.data?.find((s) => s.bookable);
-      if (first) setSlotId(first.id);
+      const first = slotOptions.find((s) => s.bookable);
+      if (first) {
+        setSlotId(first.id);
+        setSlotDate(first.date);
+      }
     }
-  }, [slots.data, slotId]);
+  }, [slotOptions, slotId]);
+
+  function pickSlot(option: { id: string; date: string }) {
+    setSlotId(option.id);
+    setSlotDate(option.date);
+  }
 
   const totals = cart?.totals;
   const minNotMet = totals?.minOrderPaise != null && totals.subtotalPaise < totals.minOrderPaise;
-  const newAddressValid = newAddressForm.formState.isValid;
+  // watch() re-renders on every keystroke; a synchronous safeParse gives a
+  // deterministic enable gate (formState.isValid lags with resolvers).
+  const addressValues = newAddressForm.watch();
+  const newAddressValid = newAddressSchema.safeParse(addressValues).success;
   const canPlace =
     Boolean(user) &&
     (Boolean(selectedAddressId) || (showNewAddress && newAddressValid)) &&
@@ -152,7 +191,7 @@ export function CheckoutClient() {
           json: {
             ...payloadAddress,
             slotId,
-            slotDate: slots.data?.find((s) => s.id === slotId)?.date ?? "",
+            slotDate: slotDate ?? slotOptions.find((s) => s.id === slotId)?.date ?? "",
             paymentMethod: payment,
             couponCode: cart.couponCode ?? undefined,
             idempotencyKey,
@@ -269,13 +308,13 @@ export function CheckoutClient() {
         {/* Slot */}
         <Card className="p-5">
           <h2 className="mb-3 text-base font-bold text-ink">{t("Delivery slot", "ഡെലിവറി സ്ലോട്ട്")}</h2>
-          {slots.isLoading ? (
+          {slotsToday.isLoading || slotsTomorrow.isLoading ? (
             <Skeleton className="h-16 w-full" />
           ) : (
             <div className="grid gap-2 sm:grid-cols-2">
-              {(slots.data ?? []).map((s) => (
+              {slotOptions.map((s) => (
                 <label
-                  key={s.id}
+                  key={`${s.date}-${s.id}`}
                   className={
                     !s.bookable
                       ? "flex cursor-not-allowed items-center justify-between rounded-xl border border-line bg-surface-muted p-3 opacity-60"
@@ -290,12 +329,12 @@ export function CheckoutClient() {
                     className="accent-primary"
                     disabled={!s.bookable}
                     checked={slotId === s.id}
-                    onChange={() => setSlotId(s.id)}
+                    onChange={() => pickSlot(s)}
                   />
                   <span className="flex-1 px-2 text-sm">
                     <span className="font-bold text-ink">{lang === "en" ? s.nameEn : s.nameMl}</span>
                     <span className="block text-xs text-muted">
-                      {t("Tomorrow", "നാളെ")} · {formatMinutes(s.startMinutes)}–{formatMinutes(s.endMinutes)}
+                      {s.dayLabel} · {formatMinutes(s.startMinutes)}–{formatMinutes(s.endMinutes)}
                     </span>
                   </span>
                   {s.bookable ? (

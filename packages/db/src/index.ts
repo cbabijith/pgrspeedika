@@ -35,3 +35,5 @@ export function getDb(): Database {
 
 export { schema };
 export * from "./schema";
+export { applyMigrations } from "./migrate";
+export { seedCatalog } from "./seed";

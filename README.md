@@ -162,17 +162,23 @@ idempotency keys for order/payment creation.
 
 ## Deployment notes
 
+- **Railway (GitHub-only):** the repo is deploy-ready via per-service
+  `railway.json` config-as-code (`apps/backend`, `apps/worker`, `apps/web`,
+  `apps/admin`) — migrations run pre-deploy and the first deploy can seed the
+  catalog + owner. Full step-by-step: **[docs/railway.md](docs/railway.md)**.
 - **Same-site cookies:** deploy web + admin + api under one registrable domain
   (e.g. `pgrspeedika.com`, `admin.pgrspeedika.com`, `api.pgrspeedika.com`) so
   the session cookie works with `sameSite=lax`; `useSecureCookies` turns on
-  automatically in production.
+  automatically in production (Railway's `*.up.railway.app` domains already
+  satisfy this).
 - Set env vars from `.env.example` (validated with Zod at startup); generate
   `BETTER_AUTH_SECRET` with `openssl rand -base64 32`. Never commit real secrets.
 - Storage defaults to the local-disk driver; set `STORAGE_DRIVER=s3` plus the
   R2/S3 vars and a public `S3_PUBLIC_URL` for production uploads.
 - Run `node dist/index.js` (API) and `node dist/worker/run.js` (worker) from
   `apps/backend` after `pnpm build`; both are stateless, so scale horizontally
-  behind a load balancer (swap the in-memory rate limiter for Redis).
+  behind a load balancer (swap the in-memory rate limiter for Redis). Web and
+  admin bind `$PORT` via plain `next start`.
 - CI (`.github/workflows/ci.yml`) runs migrations + `turbo lint typecheck test
 build` on a Postgres service, plus a Playwright job.
 
