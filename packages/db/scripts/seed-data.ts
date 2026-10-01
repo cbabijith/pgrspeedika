@@ -136,59 +136,95 @@ const loose = (
 ): SeedLooseProduct => ({ slug, nameEn, nameMl, cat, emoji, perKgPaise, hsn, ...extra });
 
 export const seedLooseProducts: SeedLooseProduct[] = [
-  // ── Vegetables ────────────────────────────────────────────────────────────
-  loose("tomato", "Tomato", "തക്കാളി", "vegetables", "🍅", 3000, "0702", { freshToday: true }),
-  loose("big-onion", "Onion (Big)", "വലിയ ഉള്ളി", "vegetables", "🧅", 3800, "0703", { freshToday: true }),
-  loose("shallots", "Shallots", "ചെറുള്ളി", "vegetables", "🧅", 9000, "0703", {
+  // ── Vegetables (36 items; prices ≈ Kerala market, Oct 2026) ───────────────
+  loose("tomato", "Tomato", "തക്കാളി", "vegetables", "🍅", 3200, "0702", { freshToday: true }),
+  loose("big-onion", "Onion (Big)", "വലിയ ഉള്ളി", "vegetables", "🧅", 4200, "0703", { freshToday: true }),
+  loose("shallots", "Shallots", "ചെറുള്ളി", "vegetables", "🧅", 9500, "0703", {
     keywords: "small onion kunjulli cherulli",
   }),
   loose("potato", "Potato", "ഉരുളക്കിഴങ്ങ്", "vegetables", "🥔", 3400, "0701"),
-  loose("green-chilli", "Green Chilli", "പച്ചമുളക്", "vegetables", "🌶️", 6000, "0709", {
+  loose("green-chilli", "Green Chilli", "പച്ചമുളക്", "vegetables", "🌶️", 7000, "0709", {
     steps: [100, 250, 500, 1000],
   }),
-  loose("brinjal", "Brinjal", "വഴുതന", "vegetables", "🍆", 4000, "0709", { freshToday: true }),
-  loose("bitter-gourd", "Bitter Gourd", "പാവയ്ക്ക", "vegetables", "🥒", 5000, "0709"),
-  loose("snake-gourd", "Snake Gourd", "പടവലം", "vegetables", "🥒", 4500, "0709", {
+  loose("brinjal", "Brinjal", "വഴുതന", "vegetables", "🍆", 4500, "0709", { freshToday: true }),
+  loose("bitter-gourd", "Bitter Gourd", "പാവയ്ക്ക", "vegetables", "🥒", 5500, "0709"),
+  loose("snake-gourd", "Snake Gourd", "പടവലം", "vegetables", "🥒", 4000, "0709", {
     keywords: "padavalam",
   }),
-  loose("long-beans", "Long Beans", "പയർ", "vegetables", "🫛", 5500, "0709", {
+  loose("long-beans", "Long Beans", "പയർ", "vegetables", "🫛", 5000, "0709", {
     keywords: "ayar payar achinga",
   }),
-  loose("ginger", "Ginger", "ഇഞ്ഞി", "vegetables", "🫚", 12000, "0910", {
+  loose("ginger", "Ginger", "ഇഞ്ഞി", "vegetables", "🫚", 14000, "0910", {
     description: "Fresh Inji, cleaned and weighed loose.",
   }),
-  loose("garlic", "Garlic", "വെളുത്തുള്ളി", "vegetables", "🧄", 14000, "0709"),
-  loose("carrot", "Carrot", "കാരറ്റ്", "vegetables", "🥕", 5500, "0706", { freshToday: true }),
+  loose("garlic", "Garlic", "വെളുത്തുള്ളി", "vegetables", "🧄", 17000, "0709"),
+  loose("carrot", "Carrot", "കാരറ്റ്", "vegetables", "🥕", 6000, "0706", { freshToday: true }),
   loose("beetroot", "Beetroot", "ബീറ്റ്റൂട്ട്", "vegetables", "🫒", 4500, "0706"),
-  loose("cabbage", "Cabbage", "കാബേജ്", "vegetables", "🥬", 3000, "0704"),
-  loose("cauliflower", "Cauliflower", "കോളിഫ്ലവർ", "vegetables", "🥦", 6000, "0704"),
-  loose("ash-gourd", "Ash Gourd", "കുംബളം", "vegetables", "🎃", 2500, "0709", {
+  loose("cabbage", "Cabbage", "കാബേജ്", "vegetables", "🥬", 2800, "0704"),
+  loose("cauliflower", "Cauliflower", "കോളിഫ്ലവർ", "vegetables", "🥦", 5500, "0704"),
+  loose("ash-gourd", "Ash Gourd", "കുംബളം", "vegetables", "🎃", 2400, "0709", {
     keywords: "kumbalanga",
   }),
-  loose("pumpkin", "Pumpkin", "മത്തൻ", "vegetables", "🎃", 3000, "0709", { keywords: "mathanga" }),
-  loose("cucumber", "Cucumber", "വെള്ളരിക്ക", "vegetables", "🥒", 3500, "0707", {
+  loose("pumpkin", "Pumpkin", "മത്തൻ", "vegetables", "🎃", 2800, "0709", { keywords: "mathanga" }),
+  loose("cucumber", "Cucumber", "വെള്ളരിക്ക", "vegetables", "🥒", 3600, "0707", {
     keywords: "vellirikka",
   }),
-  loose("ladies-finger", "Ladies Finger", "വെണ്ടയ്ക്ക", "vegetables", "🌿", 4800, "0709", {
+  loose("ladies-finger", "Ladies Finger", "വെണ്ടയ്ക്ക", "vegetables", "🌿", 5000, "0709", {
     keywords: "okra vendakka",
     freshToday: true,
   }),
-  loose("raw-banana", "Raw Banana", "പച്ചക്കേരള", "vegetables", "🍌", 4000, "0803", {
+  loose("raw-banana", "Raw Banana", "പച്ചക്കേരള", "vegetables", "🍌", 4200, "0803", {
     keywords: "pachakkaya plantain kaya",
   }),
-  loose("elephant-foot-yam", "Elephant Foot Yam", "ചേന", "vegetables", "🥔", 6000, "0714", {
+  loose("elephant-foot-yam", "Elephant Foot Yam", "ചേന", "vegetables", "🥔", 6500, "0714", {
     keywords: "chena suran",
   }),
-  loose("colocasia", "Colocasia", "ചേമ്പ്", "vegetables", "🥔", 7000, "0714", {
+  loose("colocasia", "Colocasia", "ചേമ്പ്", "vegetables", "🥔", 7500, "0714", {
     keywords: "chembu taro",
   }),
-  loose("tapioca", "Tapioca", "കപ്പ", "vegetables", "🥔", 3500, "0714", {
+  loose("tapioca", "Tapioca", "കപ്പ", "vegetables", "🥔", 3800, "0714", {
     keywords: "kappa yuca cassava",
     freshToday: true,
   }),
-  loose("capsicum", "Capsicum", "ക്യാപ്സിക്കം", "vegetables", "🫑", 8000, "0709"),
-  loose("french-beans", "French Beans", "ബീൻസ്", "vegetables", "🫛", 9000, "0708", {
+  loose("capsicum", "Capsicum", "ക്യാപ്സിക്കം", "vegetables", "🫑", 8500, "0709"),
+  loose("french-beans", "French Beans", "ബീൻസ്", "vegetables", "🫛", 9500, "0708", {
     stockGrams: 4000,
+  }),
+  loose("ivy-gourd", "Ivy Gourd", "കോവയ്ക്ക", "vegetables", "🥒", 4500, "0709", {
+    keywords: "kovakka kovakkai tendli",
+    freshToday: true,
+  }),
+  loose("ridge-gourd", "Ridge Gourd", "പീച്ചിൽ", "vegetables", "🥒", 4000, "0709", {
+    keywords: "peechil peekka turai",
+  }),
+  loose("bottle-gourd", "Bottle Gourd", "ചുരക്ക", "vegetables", "🥒", 3000, "0709", {
+    keywords: "churakka lauki",
+  }),
+  loose("cluster-beans", "Cluster Beans", "കോതവരക്ക", "vegetables", "🫛", 5500, "0709", {
+    keywords: "kothavarikka goru chikkudi",
+  }),
+  loose("drumstick", "Drumstick", "മുരിങ്ങക്കായ", "vegetables", "🌿", 7000, "0709", {
+    keywords: "muringakkai murungakkai moringa pods",
+    freshToday: true,
+  }),
+  loose("radish", "Radish", "മുള്ളങ്ങി", "vegetables", "🌱", 3000, "0706", {
+    keywords: "mullangi mooli",
+  }),
+  loose("sweet-potato", "Sweet Potato", "മധുരക്കിഴങ്ങ്", "vegetables", "🍠", 5500, "0714", {
+    keywords: "madhurakizhangu chilakizhangu shakarkandi",
+  }),
+  loose("raw-papaya", "Raw Papaya", "കപ്പലങ്ങ", "vegetables", "🍈", 3500, "0709", {
+    keywords: "kappalanga pacha pappaya green papaya",
+  }),
+  loose("mushroom", "Oyster Mushroom", "കൂൺ", "vegetables", "🍄", 11000, "0709", {
+    keywords: "koona kalan chippu mushroom",
+    freshToday: true,
+  }),
+  loose("green-peas", "Green Peas (Fresh)", "പച്ച ബടാണി", "vegetables", "🫛", 9000, "0708", {
+    keywords: "pacha batani pattani fresh peas",
+  }),
+  loose("lemon-cucumber", "Lemon Cucumber", "കാണി വെള്ളരിക്ക", "vegetables", "🥒", 4000, "0707", {
+    keywords: "kani vellarikka dosakai",
   }),
 
   // ── Fruits ────────────────────────────────────────────────────────────────
