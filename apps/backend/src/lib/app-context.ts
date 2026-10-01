@@ -16,6 +16,12 @@ export interface AppContext {
   notifier: NotificationProvider;
 }
 
+/**
+ * OTP codes issued while ENABLE_TEST_OTP=true (E2E/CI only). Never populated
+ * in production because the flag stays unset there.
+ */
+export const testOtpStore = new Map<string, string>();
+
 export function createAppContext(env: Env = getEnv(), db: Database = getDb()): AppContext {
   const auth = createAuth({
     db,
@@ -23,6 +29,9 @@ export function createAppContext(env: Env = getEnv(), db: Database = getDb()): A
     baseURL: env.BETTER_AUTH_URL,
     trustedOrigins: [env.WEB_URL, env.ADMIN_URL, ...env.CORS_ORIGINS],
     sendOtp: async ({ phoneNumber, code }) => {
+      if (process.env.ENABLE_TEST_OTP === "true") {
+        testOtpStore.set(phoneNumber, code);
+      }
       await createNotificationProviderSingleton().send({
         channel: "sms",
         to: phoneNumber,

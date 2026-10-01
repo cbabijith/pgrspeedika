@@ -1,6 +1,9 @@
 import {
+  cloneElement,
   forwardRef,
+  useId,
   type InputHTMLAttributes,
+  type ReactElement,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
@@ -29,6 +32,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   return <select ref={ref} className={cn(fieldClass, "pr-8", className)} {...props} />;
 });
 
+/**
+ * Label + control + hint/error. When `htmlFor` is not given the control is
+ * cloned with a generated id so the label is always programmatically linked
+ * (screen readers and getByLabel queries rely on it).
+ */
 export function Field({
   label,
   htmlFor,
@@ -41,15 +49,23 @@ export function Field({
   htmlFor?: string;
   error?: string;
   hint?: string;
-  children: React.ReactNode;
+  children: ReactElement<{ id?: string; "aria-invalid"?: boolean }>;
   className?: string;
 }) {
+  const generatedId = useId();
+  // An explicit htmlFor wins; next an id already on the control. Only when
+  // neither exists is a generated id injected (cloning a wrapper div must
+  // never shadow an inner input's id).
+  const childId = children.props.id;
+  const id = htmlFor ?? childId ?? generatedId;
+  const control =
+    htmlFor || childId ? children : cloneElement(children, { id, "aria-invalid": error ? true : undefined });
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={htmlFor} className="text-sm font-semibold text-ink">
+      <label htmlFor={id} className="text-sm font-semibold text-ink">
         {label}
       </label>
-      {children}
+      {control}
       {hint && !error ? <p className="text-xs text-muted">{hint}</p> : null}
       {error ? (
         <p role="alert" className="text-xs font-medium text-danger">
