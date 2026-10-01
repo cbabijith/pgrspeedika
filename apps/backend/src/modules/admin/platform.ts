@@ -309,6 +309,27 @@ export function adminPlatformRoutes(ctx: AppContext) {
           return c.json(ok(row));
         },
       )
+      .delete("/staff/:id", requireStaff(ctx, "staff:manage"), async (c) => {
+        const id = c.req.param("id");
+        const staff = c.get("user");
+        if (id === staff.id) throw badRequest("You cannot delete your own account");
+        const [row] = await ctx.db
+          .select({ id: user.id, role: user.role, email: user.email })
+          .from(user)
+          .where(eq(user.id, id));
+        if (!row) throw notFound("Staff member not found");
+        if (row.role === "customer") throw badRequest("Use the customers section for customers");
+        // Cascades to sessions/accounts; orders keep their snapshots.
+        await ctx.db.delete(user).where(eq(user.id, id));
+        await writeAudit(ctx.db, {
+          actor: staff,
+          action: "staff.deleted",
+          entityType: "user",
+          entityId: id,
+          after: { email: row.email, role: row.role },
+        });
+        return c.json(ok({ deleted: id }));
+      })
 
       // ── Settings ────────────────────────────────────────────────────────────
       .get("/settings", requireStaff(ctx, "settings:manage"), async (c) => {
