@@ -1,12 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Heart } from "lucide-react";
 import { Badge, Money } from "@pgrs/ui";
 import { formatGrams } from "@pgrs/contracts";
 import type { ProductCard, ProductDetail } from "@pgrs/contracts";
+import { api, unwrap } from "@/lib/api";
+import { useSession } from "@/lib/hooks";
 import { useUIStore } from "@/store/ui";
 import { AddToCartPanel } from "./add-to-cart-panel";
 import { ProductCard as ProductCardView } from "./product-card";
+import { ReviewSection } from "./review-section";
 
 export function ProductDetailClient({
   product,
@@ -16,8 +22,38 @@ export function ProductDetailClient({
   related: ProductCard[];
 }) {
   const lang = useUIStore((s) => s.lang);
+  const session = useSession();
+  const user = session.data?.user ?? null;
+  const queryClient = useQueryClient();
   const [image] = useState(product.images[0]?.url ?? product.imageUrl ?? null);
   const t = (en: string, ml: string) => (lang === "en" ? en : ml);
+
+  const wishlist = useQuery({
+    queryKey: ["wishlist"],
+    enabled: Boolean(user),
+    queryFn: () => unwrap<Array<{ productId: string }>>(api.api.wishlist.$get({ query: {} })),
+  });
+  const wishlisted = (wishlist.data ?? []).some((w) => w.productId === product.id);
+
+  const toggleWishlist = useMutation({
+    mutationFn: () =>
+      unwrap<{ wishlisted: boolean }>(api.api.wishlist.toggle.$post({ json: { productId: product.id } })),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      toast.success(
+        data.wishlisted
+          ? t("Saved to wishlist", "വിഷ്ലിസ്റ്റിൽ സേവ് ചെയ്തു")
+          : t("Removed from wishlist", "വിഷ്ലിസ്റ്റിൽ നിന്ന് നീക്കി"),
+      );
+    },
+    onError: (err) => {
+      if (err.message.toLowerCase().includes("sign in")) {
+        window.location.href = `/login?next=/products/${product.slug}`;
+        return;
+      }
+      toast.error(err.message);
+    },
+  });
 
   return (
     <div className="container-page space-y-10 py-6">
@@ -50,7 +86,25 @@ export function ProductDetailClient({
             </p>
           </div>
 
-          <AddToCartPanel product={product} />
+          <div className="flex items-start justify-between gap-3">
+            <AddToCartPanel product={product} />
+            <button
+              type="button"
+              onClick={() => toggleWishlist.mutate()}
+              aria-pressed={wishlisted}
+              aria-label={
+                wishlisted
+                  ? t("Remove from wishlist", "വിഷ്ലിസ്റ്റിൽ നിന്ന് നീക്കുക")
+                  : t("Save to wishlist", "വിഷ്ലിസ്റ്റിൽ സേവ് ചെയ്യുക")
+              }
+              className="mt-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line hover:border-primary-300"
+            >
+              <Heart
+                className={wishlisted ? "h-5 w-5 fill-primary text-primary" : "h-5 w-5 text-muted"}
+                aria-hidden
+              />
+            </button>
+          </div>
 
           {product.description ? (
             <div>
@@ -92,6 +146,8 @@ export function ProductDetailClient({
           </div>
         </section>
       ) : null}
+
+      <ReviewSection productId={product.id} productSlug={product.slug} />
 
       <p className="text-center text-xs text-muted">
         {product.sellingType === "loose"

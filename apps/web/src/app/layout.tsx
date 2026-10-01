@@ -8,6 +8,7 @@ import { PincodeCheck } from "@/components/pincode-check";
 import { ServiceWorker } from "@/components/service-worker";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: {
     default: "PGRS Peedika · Fresh vegetables & groceries delivered in Kannur",
     template: "%s · PGRS Peedika",
