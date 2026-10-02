@@ -18,7 +18,9 @@ export function AddToCartPanel({ product }: { product: ProductDetail }) {
 
   const variant = product.variants.find((v) => v.id === variantId) ?? product.variants[0];
   const soldOut =
-    product.availableQuantity != null && product.availableQuantity < (variant?.baseQuantity ?? 1) * quantity;
+    product.availableQuantity != null &&
+    product.availableQuantity <
+      (product.sellingType === "packaged" ? 1 : (variant?.baseQuantity ?? 1)) * quantity;
   const t = (en: string, ml: string) => (lang === "en" ? en : ml);
 
   function add() {

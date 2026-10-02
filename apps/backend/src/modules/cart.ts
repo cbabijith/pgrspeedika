@@ -1,3 +1,4 @@
+import { servedZoneCondition } from "../services/delivery-area";
 import { newHono } from "../lib/hono";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -11,7 +12,7 @@ import {
   type CartDTO,
   type CartLine,
 } from "@pgrs/contracts";
-import { deliveryZones, inventory, productVariants, products } from "@pgrs/db";
+import { categories, deliveryZones, inventory, productVariants, products } from "@pgrs/db";
 import type { AppContext } from "../lib/app-context";
 import { ok } from "../lib/errors";
 import { requireAuth } from "../lib/context";
@@ -68,11 +69,16 @@ async function previewCart(
     })
     .from(productVariants)
     .innerJoin(products, eq(productVariants.productId, products.id))
+    .innerJoin(categories, eq(products.categoryId, categories.id))
     .leftJoin(inventory, eq(inventory.productId, products.id))
     .where(
-      inArray(
-        productVariants.id,
-        items.map((i) => i.variantId),
+      and(
+        eq(products.isActive, true),
+        eq(categories.isActive, true),
+        inArray(
+          productVariants.id,
+          items.map((i) => i.variantId),
+        ),
       ),
     );
 
@@ -107,10 +113,7 @@ async function previewCart(
   const gstTotal = lines.reduce((s, l) => s + l.lineGstPaise, 0);
   let zone: typeof deliveryZones.$inferSelect | null = null;
   if (pincode) {
-    const [z] = await ctx.db
-      .select()
-      .from(deliveryZones)
-      .where(and(eq(deliveryZones.pincode, pincode), eq(deliveryZones.isActive, true)));
+    const [z] = await ctx.db.select().from(deliveryZones).where(servedZoneCondition(pincode));
     zone = z ?? null;
   }
   const deliveryFee =

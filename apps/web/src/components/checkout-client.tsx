@@ -12,6 +12,7 @@ import { Alert, Badge, Button, Card, Field, Input, Money, Skeleton, Textarea } f
 import { formatINR, formatMinutes, type Address, type SlotAvailability } from "@pgrs/contracts";
 import { api, unwrap } from "@/lib/api";
 import { useCart, useSession } from "@/lib/hooks";
+import { GuestCheckout } from "./guest-checkout";
 import { useUIStore } from "@/store/ui";
 
 type PaymentMethod = "cod" | "razorpay";
@@ -22,7 +23,7 @@ const newAddressSchema = z.object({
   contactPhone: z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number"),
   line1: z.string().min(4, "House / street is required").max(200),
   landmark: z.string().max(120),
-  pincode: z.string().regex(/^[1-9]\d{5}$/, "We serve 670001, 670007, 670012, 671314"),
+  pincode: z.string().regex(/^[1-9]\d{5}$/, "Enter a valid 6-digit pincode"),
   city: z.string().min(2).max(60),
 });
 type NewAddressValues = z.infer<typeof newAddressSchema>;
@@ -34,7 +35,7 @@ const newAddressDefaults: NewAddressValues = {
   line1: "",
   landmark: "",
   pincode: "",
-  city: "Kannur",
+  city: "Kottayam",
 };
 
 /** Full checkout: address (React Hook Form + Zod), slot, payment, order. */
@@ -85,8 +86,6 @@ export function CheckoutClient() {
     ];
   }, [slotsToday.data, slotsTomorrow.data, slotDates, t]);
 
-  const { cart } = useCart(pincode);
-
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [showNewAddress, setShowNewAddress] = useState(false);
   const newAddressForm = useForm<NewAddressValues>({
@@ -94,6 +93,12 @@ export function CheckoutClient() {
     mode: "onChange",
     defaultValues: newAddressDefaults,
   });
+  const deliveryPincode = newAddressForm.watch("pincode");
+  const { cart } = useCart(
+    showNewAddress
+      ? deliveryPincode || null
+      : (addresses.data?.find((a) => a.id === selectedAddressId)?.pincode ?? pincode),
+  );
   const [slotId, setSlotId] = useState<string | null>(null);
   const [slotDate, setSlotDate] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("cod");
@@ -221,28 +226,13 @@ export function CheckoutClient() {
       router.push(`/orders/${result.orderId}?placed=1`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not place the order");
-      setIdempotencyKey(`web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`);
     } finally {
       setPlacing(false);
     }
   }
 
-  if (!user) {
-    return (
-      <div className="container-page py-10">
-        <Alert tone="warning" title={t("Please sign in", "ലോഗിൻ ചെയ്യുക")}>
-          {t("Login with your phone number to checkout.", "ചെക്കൗട്ടിന് ലോഗിൻ ചെയ്യുക.")}{" "}
-          <a href="/login?next=/checkout" className="font-bold underline">
-            {t("Go to login", "ലോഗിൻ")}
-          </a>
-          {" · "}
-          <a href="/whatsapp" className="font-bold underline">
-            {t("or order on WhatsApp as guest", "അല്ലെങ്കിൽ WhatsApp-ൽ ഓർഡർ ചെയ്യൂ")}
-          </a>
-        </Alert>
-      </div>
-    );
-  }
+  if (session.isPending) return <div className="container-page py-8">Loading checkout…</div>;
+  if (!user) return <GuestCheckout />;
 
   return (
     <div className="container-page grid gap-6 py-6 lg:grid-cols-[1fr_380px]">
@@ -322,7 +312,7 @@ export function CheckoutClient() {
                   className={
                     !s.bookable
                       ? "flex cursor-not-allowed items-center justify-between rounded-xl border border-line bg-surface-muted p-3 opacity-60"
-                      : slotId === s.id
+                      : slotId === s.id && slotDate === s.date
                         ? "flex cursor-pointer items-center justify-between rounded-xl border-2 border-primary bg-primary-50 p-3"
                         : "flex cursor-pointer items-center justify-between rounded-xl border border-line p-3 hover:border-primary-300"
                   }
@@ -332,7 +322,7 @@ export function CheckoutClient() {
                     name="slot"
                     className="accent-primary"
                     disabled={!s.bookable}
-                    checked={slotId === s.id}
+                    checked={slotId === s.id && slotDate === s.date}
                     onChange={() => pickSlot(s)}
                   />
                   <span className="flex-1 px-2 text-sm">
@@ -529,7 +519,7 @@ function NewAddressForm({ lang, form }: { lang: "en" | "ml"; form: UseFormReturn
         </Field>
         <Field
           label={t("Pincode", "പിൻകോഡ്")}
-          hint="We serve 670001, 670007, 670012, 671314"
+          hint="Delivery is available only in enabled pincodes within Kottayam district"
           error={errors.pincode?.message}
         >
           <Input id="na-pincode" inputMode="numeric" {...form.register("pincode")} />

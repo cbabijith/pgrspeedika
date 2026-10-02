@@ -59,6 +59,14 @@ export type SeedPackedProduct = {
 
 export const seedCategories: SeedCategory[] = [
   {
+    slug: "groceries",
+    nameEn: "Groceries",
+    nameMl: "പലചരക്ക്",
+    description: "Everyday essentials, tea, coffee, sugar and salt.",
+    emoji: "🛒",
+    sortOrder: 3,
+  },
+  {
     slug: "vegetables",
     nameEn: "Vegetables",
     nameMl: "പച്ചക്കറികൾ",
@@ -594,53 +602,62 @@ export const seedPackedProducts: SeedPackedProduct[] = [
   packed("bread", "Sandwich Bread", "ബ്രെഡ്", "snacks-and-bakery", "🍞", "1905", 5, [
     { labelEn: "400 g", labelMl: "400 ഗ്രാം", quantity: 1, unitType: "unit", pricePaise: 4500 },
   ]),
-  packed("tea-dust", "Tea Dust", "ചായപ്പൊടി", "snacks-and-bakery", "🍵", "0902", 5, [
+  packed("tea-dust", "Tea Dust", "ചായപ്പൊടി", "groceries", "🍵", "0902", 5, [
     { labelEn: "250 g", labelMl: "250 ഗ്രാം", quantity: 250, unitType: "weight", pricePaise: 9500 },
     { labelEn: "500 g", labelMl: "500 ഗ്രാം", quantity: 500, unitType: "weight", pricePaise: 18000 },
   ]),
-  packed("coffee-powder", "Coffee Powder (70:30)", "കാപി പൊടി", "snacks-and-bakery", "☕", "0901", 5, [
+  packed("coffee-powder", "Coffee Powder (70:30)", "കാപി പൊടി", "groceries", "☕", "0901", 5, [
     { labelEn: "200 g", labelMl: "200 ഗ്രാം", quantity: 200, unitType: "weight", pricePaise: 13000 },
   ]),
-  packed("sugar", "Sugar", "പഞ്ചസാര", "snacks-and-bakery", "🧂", "1701", 5, [
+  packed("sugar", "Sugar", "പഞ്ചസാര", "groceries", "🧂", "1701", 5, [
     { labelEn: "1 kg", labelMl: "1 കി.ഗ്രാം", quantity: 1000, unitType: "weight", pricePaise: 4800 },
   ]),
-  packed("salt", "Iodised Salt", "ഉപ്പ്", "snacks-and-bakery", "🧂", "2501", 5, [
+  packed("salt", "Iodised Salt", "ഉപ്പ്", "groceries", "🧂", "2501", 5, [
     { labelEn: "1 kg", labelMl: "1 കി.ഗ്രാം", quantity: 1000, unitType: "weight", pricePaise: 2500 },
   ]),
-  packed("jaggery", "Jaggery (Block)", "ശർക്കര", "snacks-and-bakery", "🟫", "1702", 5, [
+  packed("jaggery", "Jaggery (Block)", "ശർക്കര", "groceries", "🟫", "1702", 5, [
     { labelEn: "500 g", labelMl: "500 ഗ്രാം", quantity: 500, unitType: "weight", pricePaise: 6000 },
   ]),
 ];
 
+/** Demo zones for Kottayam only; configure actual coverage and fees before launch. */
 export const seedZones = [
   {
-    pincode: "670001",
-    areaNameEn: "Kannur Town",
-    areaNameMl: "കണ്ണൂർ ടൗൺ",
+    pincode: "686001",
+    areaNameEn: "Kottayam Town",
+    areaNameMl: "കോട്ടയം ടൗൺ",
     minOrderPaise: 9900,
     deliveryFeePaise: 2900,
     freeDeliveryThresholdPaise: 49900,
   },
   {
-    pincode: "670012",
-    areaNameEn: "Kannur – Chelari Road",
-    areaNameMl: "കണ്ണൂർ – ചെലരി റോഡ്",
+    pincode: "686631",
+    areaNameEn: "Ettumanoor",
+    areaNameMl: "ഏറ്റുമാനൂർ",
     minOrderPaise: 14900,
     deliveryFeePaise: 3900,
     freeDeliveryThresholdPaise: 59900,
   },
   {
-    pincode: "670007",
-    areaNameEn: "Thalassery",
-    areaNameMl: "തലശ്ശേരി",
+    pincode: "686575",
+    areaNameEn: "Pala",
+    areaNameMl: "പാലാ",
     minOrderPaise: 19900,
     deliveryFeePaise: 4900,
     freeDeliveryThresholdPaise: 69900,
   },
   {
-    pincode: "671314",
-    areaNameEn: "Kasaragod – Kanhangad",
-    areaNameMl: "കാസർഗോഡ് – കാഞ്ഞങ്ങാട്",
+    pincode: "686101",
+    areaNameEn: "Changanassery",
+    areaNameMl: "ചങ്ങനാശ്ശേരി",
+    minOrderPaise: 19900,
+    deliveryFeePaise: 4900,
+    freeDeliveryThresholdPaise: 69900,
+  },
+  {
+    pincode: "686141",
+    areaNameEn: "Vaikom",
+    areaNameMl: "വൈക്കം",
     minOrderPaise: 24900,
     deliveryFeePaise: 5900,
     freeDeliveryThresholdPaise: 79900,

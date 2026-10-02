@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "@pgrs/config/tailwind-theme.css";
-@source "../../packages/ui/src/**/*.{ts,tsx}";
-@source "./src/**/*.{ts,tsx}";
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";
+@source "../**/*.{ts,tsx}";
 
 @layer base {
   body {
@@ -43,5 +43,23 @@
   }
   .table-base tbody tr:hover td {
     background-color: var(--color-primary-50);
+  }
+}
+
+@media (max-width: 767px) {
+  .container-admin {
+    padding: 1rem 1rem calc(88px + env(safe-area-inset-bottom));
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  button {
+    min-height: 44px;
+  }
+  button:has(svg):empty {
+    min-width: 44px;
   }
 }

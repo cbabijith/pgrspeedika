@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { api, unwrap } from "@/lib/api";
@@ -19,6 +19,7 @@ interface Suggestion {
 
 export function SearchBox() {
   const router = useRouter();
+  const searchId = useId();
   const lang = useUIStore((s) => s.lang);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -53,13 +54,13 @@ export function SearchBox() {
   return (
     <div ref={boxRef} className="relative w-full">
       <form onSubmit={submit} role="search">
-        <label htmlFor="site-search" className="sr-only">
+        <label htmlFor={searchId} className="sr-only">
           Search vegetables and groceries
         </label>
         <div className="flex items-center gap-2 rounded-full border border-line bg-surface-muted px-4 py-2.5 focus-within:border-primary focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/20">
           <Search className="h-4 w-4 shrink-0 text-muted" aria-hidden />
           <input
-            id="site-search"
+            id={searchId}
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
@@ -67,7 +68,7 @@ export function SearchBox() {
             }}
             onFocus={() => setOpen(true)}
             placeholder={lang === "en" ? "Search tomato, matta rice, തക്കാളി…" : "തക്കാളി, അരി തിരയുക…"}
-            className="w-full bg-transparent text-sm outline-none placeholder:text-muted"
+            className="w-full bg-transparent text-base md:text-sm outline-none placeholder:text-muted"
             autoComplete="off"
           />
         </div>

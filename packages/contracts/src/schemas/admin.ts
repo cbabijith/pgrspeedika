@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { pincodeSchema, uuidSchema } from "./common";
+import { normalizePhone, pincodeSchema, uuidSchema } from "./common";
+import { isKottayamPincode } from "../delivery-area";
 
 export const zoneInputSchema = z.object({
-  pincode: pincodeSchema,
+  pincode: pincodeSchema.refine(isKottayamPincode, "Delivery is currently limited to Kottayam district"),
   areaNameEn: z.string().min(2).max(80),
   areaNameMl: z.string().max(120).default(""),
   minOrderPaise: z.number().int().min(0).max(100000000),
@@ -57,7 +58,10 @@ export const bannerInputSchema = z.object({
 export const inventoryAdjustSchema = z.object({
   productId: uuidSchema,
   /** Signed delta: grams for loose goods, units for packaged. */
-  quantityDelta: z.number().int(),
+  quantityDelta: z
+    .number()
+    .int()
+    .refine((n) => n !== 0, "Enter a non-zero stock change"),
   reason: z.string().min(2).max(200),
   movementType: z.enum(["purchase", "adjustment"]).default("adjustment"),
 });
@@ -78,7 +82,19 @@ export const shopSettingsSchema = z.object({
   name: z.string().min(2).max(80),
   tagline: z.string().max(120).default(""),
   phone: z.string().max(20),
-  whatsapp: z.string().max(20),
+  whatsapp: z
+    .string()
+    .trim()
+    .max(20)
+    .refine((value) => {
+      if (!value) return true;
+      try {
+        normalizePhone(value);
+        return true;
+      } catch {
+        return false;
+      }
+    }, "Enter a valid Indian WhatsApp mobile number"),
   email: z.string().email().or(z.literal("")),
   addressLine: z.string().max(200),
   gstin: z

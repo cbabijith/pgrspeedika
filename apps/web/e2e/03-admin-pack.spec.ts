@@ -31,7 +31,7 @@ async function apiLogin(page: Page) {
  * Requires the seeded owner (pnpm db:seed) and the COD checkout spec.
  */
 test("admin packs an order and the customer sees the final bill", async ({ browser, page }) => {
-  test.skip(!process.env.SEED_OWNER_PASSWORD, "SEED_OWNER_PASSWORD required");
+  expect(process.env.SEED_OWNER_PASSWORD, "Seeded owner password is required").toBeTruthy();
 
   // Customer session for verification at the end.
   await apiLogin(page);
@@ -41,20 +41,49 @@ test("admin packs an order and the customer sees the final bill", async ({ brows
   const admin = await adminContext.newPage();
   await admin.goto("/login");
   await admin.getByLabel("Email").fill(process.env.SEED_OWNER_EMAIL ?? "owner@pgrspeedika.example");
-  await admin.getByLabel("Password").fill(process.env.SEED_OWNER_PASSWORD ?? "");
+  await admin.getByLabel("Password", { exact: true }).fill(process.env.SEED_OWNER_PASSWORD ?? "");
   await admin.getByRole("button", { name: /sign in/i }).click();
   await admin.waitForURL(/dashboard/);
 
-  // Find the newest confirmed WEB order (placed by the checkout spec — the
-  // verifying session belongs to that customer).
-  const res = await admin.request.get(
-    `${API}/api/admin/orders?status=confirmed&source=web&page=1&pageSize=1`,
+  // Create this test's order independently; no earlier spec or existing order is required.
+  const catalog = await page.request.get(`${API}/api/catalog/products/matta-rice`);
+  const rice = (await catalog.json()).data.product.variants.find(
+    (v: { baseQuantity: number }) => v.baseQuantity === 5000,
   );
-  expect(res.ok(), "owner session must authorize the admin API").toBeTruthy();
-  const body = (await res.json()) as { data?: { items?: Array<{ id: string; orderNumber: string }> } };
-  const order = body.data?.items?.[0];
-  test.skip(!order, "no confirmed order — run checkout-cod.spec before this one");
-  if (!order) return;
+  expect(rice).toBeTruthy();
+  const cart = await page.request.post(`${API}/api/cart/items`, {
+    data: { items: [{ variantId: rice.id, quantity: 1 }] },
+  });
+  expect(cart.ok()).toBeTruthy();
+  const tomorrow = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(Date.now() + 86400000));
+  const slots = (await (await page.request.get(`${API}/api/delivery/slots?date=${tomorrow}`)).json()).data;
+  const slot = slots.find((s: { bookable: boolean }) => s.bookable);
+  expect(slot).toBeTruthy();
+  const placed = await page.request.post(`${API}/api/checkout/order`, {
+    data: {
+      address: {
+        label: "Test",
+        contactName: "Packing customer",
+        contactPhone: PHONE,
+        line1: "Packing house, Market road",
+        pincode: "686001",
+        city: "Kottayam",
+        isDefault: true,
+      },
+      slotId: slot.id,
+      slotDate: tomorrow,
+      paymentMethod: "cod",
+      idempotencyKey: `packing-${Date.now()}`,
+    },
+  });
+  expect(placed.ok()).toBeTruthy();
+  const result = (await placed.json()).data;
+  const order = { id: result.orderId, orderNumber: result.orderNumber };
 
   // Pack it through the packing screen (ordered weights are prefilled).
   await admin.goto(`/orders/${order.id}`);

@@ -1,9 +1,9 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@pgrs/db";
 import { EVENTS } from "@pgrs/events";
-import { inventory, inventoryMovements } from "@pgrs/db";
+import { inventory, inventoryMovements, products } from "@pgrs/db";
 import { OutboxPublisher } from "@pgrs/events";
-import { outOfStock } from "../lib/errors";
+import { badRequest, outOfStock } from "../lib/errors";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
@@ -12,6 +12,28 @@ export interface StockReservationItem {
   nameEn: string;
   /** Grams for loose goods, units for packaged goods. */
   amount: number;
+}
+
+function aggregateReservations(items: StockReservationItem[]): StockReservationItem[] {
+  const grouped = new Map<string, StockReservationItem>();
+  for (const item of items) {
+    if (!Number.isSafeInteger(item.amount) || item.amount <= 0) throw badRequest("Invalid stock quantity");
+    const existing = grouped.get(item.productId);
+    grouped.set(item.productId, { ...item, amount: item.amount + (existing?.amount ?? 0) });
+  }
+  // Every checkout locks products in the same order, avoiding cross-cart deadlocks.
+  return [...grouped.values()].sort((a, b) => a.productId.localeCompare(b.productId));
+}
+
+async function lockProducts(tx: Tx, ids: string[]) {
+  if (!ids.length) return;
+  // Catalog edits and deletion lock products before inventory; stock writes use the same order.
+  await tx
+    .select({ id: products.id })
+    .from(products)
+    .where(inArray(products.id, ids))
+    .orderBy(products.id)
+    .for("key share");
 }
 
 /**
@@ -25,24 +47,28 @@ export async function reserveStock(
   referenceId: string,
 ): Promise<void> {
   const failed: string[] = [];
-  for (const item of items) {
+  const grouped = aggregateReservations(items);
+  await lockProducts(
+    tx,
+    grouped.map((i) => i.productId),
+  );
+  for (const item of grouped) {
     const rows = await tx
       .update(inventory)
       .set({
-        reservedQuantity: sql`${inventory.reservedQuantity} + ${item.amount}`,
+        reservedQuantity: sql`case when ${inventory.trackStock} then ${inventory.reservedQuantity} + ${item.amount} else ${inventory.reservedQuantity} end`,
         updatedAt: new Date(),
       })
       .where(
         and(
           eq(inventory.productId, item.productId),
-          eq(inventory.trackStock, true),
-          sql`${inventory.stockQuantity} - ${inventory.reservedQuantity} >= ${item.amount}`,
+          sql`(not ${inventory.trackStock} or ${inventory.stockQuantity} - ${inventory.reservedQuantity} >= ${item.amount})`,
         ),
       )
-      .returning({ productId: inventory.productId });
+      .returning({ productId: inventory.productId, trackStock: inventory.trackStock });
     if (rows.length === 0) {
       failed.push(item.nameEn);
-    } else {
+    } else if (rows[0]?.trackStock) {
       await tx.insert(inventoryMovements).values({
         productId: item.productId,
         movementType: "reserve",
@@ -65,14 +91,21 @@ export async function releaseStock(
   items: StockReservationItem[],
   referenceId: string,
 ): Promise<void> {
-  for (const item of items) {
-    await tx
+  const grouped = aggregateReservations(items);
+  await lockProducts(
+    tx,
+    grouped.map((i) => i.productId),
+  );
+  for (const item of grouped) {
+    const updated = await tx
       .update(inventory)
       .set({
         reservedQuantity: sql`GREATEST(${inventory.reservedQuantity} - ${item.amount}, 0)`,
         updatedAt: new Date(),
       })
-      .where(eq(inventory.productId, item.productId));
+      .where(and(eq(inventory.productId, item.productId), eq(inventory.trackStock, true)))
+      .returning();
+    if (!updated.length) continue;
     await tx.insert(inventoryMovements).values({
       productId: item.productId,
       movementType: "release",
@@ -100,25 +133,47 @@ export interface SaleItem {
  * same transaction's outbox.
  */
 export async function commitSale(tx: Tx, items: SaleItem[], referenceId: string): Promise<void> {
+  const grouped = new Map<string, SaleItem>();
   for (const item of items) {
-    await tx
-      .update(inventory)
-      .set({
-        stockQuantity: sql`${inventory.stockQuantity} - ${item.soldAmount}`,
-        reservedQuantity: sql`GREATEST(${inventory.reservedQuantity} - ${item.reservedAmount}, 0)`,
-        updatedAt: new Date(),
-      })
-      .where(eq(inventory.productId, item.productId));
-    await tx.insert(inventoryMovements).values({
-      productId: item.productId,
-      movementType: "sale",
-      quantityDelta: -item.soldAmount,
-      reason: "Packed for order",
-      referenceType: "order",
-      referenceId,
+    const old = grouped.get(item.productId);
+    grouped.set(item.productId, {
+      ...item,
+      soldAmount: item.soldAmount + (old?.soldAmount ?? 0),
+      reservedAmount: item.reservedAmount + (old?.reservedAmount ?? 0),
     });
   }
-  await emitStockEvents(tx, items);
+  const sorted = [...grouped.values()].sort((a, b) => a.productId.localeCompare(b.productId));
+  await lockProducts(
+    tx,
+    sorted.map((i) => i.productId),
+  );
+  for (const item of sorted) {
+    const updated = await tx
+      .update(inventory)
+      .set({
+        stockQuantity: sql`case when ${inventory.trackStock} then ${inventory.stockQuantity} - ${item.soldAmount} else ${inventory.stockQuantity} end`,
+        reservedQuantity: sql`case when ${inventory.trackStock} then ${inventory.reservedQuantity} - ${item.reservedAmount} else ${inventory.reservedQuantity} end`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(inventory.productId, item.productId),
+          sql`(not ${inventory.trackStock} or (${inventory.reservedQuantity} >= ${item.reservedAmount} and ${inventory.stockQuantity} - ${item.soldAmount} >= ${inventory.reservedQuantity} - ${item.reservedAmount}))`,
+        ),
+      )
+      .returning();
+    if (!updated.length) throw outOfStock([item.nameEn]);
+    if (updated[0]?.trackStock)
+      await tx.insert(inventoryMovements).values({
+        productId: item.productId,
+        movementType: "sale",
+        quantityDelta: -item.soldAmount,
+        reason: "Packed for order",
+        referenceType: "order",
+        referenceId,
+      });
+  }
+  await emitStockEvents(tx, [...grouped.values()]);
 }
 
 /** Available-to-sell for a product (stock minus reservations). */
@@ -143,10 +198,11 @@ async function emitStockEvents(tx: Tx, items: SaleItem[]): Promise<void> {
         stock: inventory.stockQuantity,
         reserved: inventory.reservedQuantity,
         low: inventory.lowStockThreshold,
+        track: inventory.trackStock,
       })
       .from(inventory)
       .where(eq(inventory.productId, item.productId));
-    if (!row) continue;
+    if (!row || !row.track) continue;
     const available = Math.max(0, row.stock - row.reserved);
     const payload = {
       productId: item.productId,

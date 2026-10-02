@@ -26,8 +26,9 @@ export const outOfStock = (names: string[]) =>
   new ApiHttpError(409, "OUT_OF_STOCK", "Some items went out of stock", { items: names });
 export const slotUnavailable = (message = "This delivery slot is full or closed") =>
   new ApiHttpError(409, "SLOT_UNAVAILABLE", message);
-export const zoneNotServed = (message = "We do not deliver to this pincode yet") =>
-  new ApiHttpError(422, "ZONE_NOT_SERVED", message);
+export const zoneNotServed = (
+  message = "Delivery is available only in enabled pincodes within Kottayam district",
+) => new ApiHttpError(422, "ZONE_NOT_SERVED", message);
 export const minOrderNotMet = (minPaise: number) =>
   new ApiHttpError(422, "MIN_ORDER_NOT_MET", "Your cart is below this area's minimum order", {
     minOrderPaise: minPaise,

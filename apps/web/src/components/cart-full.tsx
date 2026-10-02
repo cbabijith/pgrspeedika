@@ -6,17 +6,15 @@ import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { Alert, Button, EmptyState, Money, QuantityStepper } from "@pgrs/ui";
 import { formatINR } from "@pgrs/contracts";
-import { useCart, useCartActions, useSession } from "@/lib/hooks";
+import { useCart, useCartActions } from "@/lib/hooks";
 import { useUIStore } from "@/store/ui";
+import { UnavailableCartNotice } from "./unavailable-cart-notice";
 
 /** Full-page cart with free-delivery progress bar. */
 export function CartFull() {
   const router = useRouter();
-  const session = useSession();
-  const signedIn = Boolean(session.data?.user);
-  const pincode = useUIStore((s) => s.pincode);
   const lang = useUIStore((s) => s.lang);
-  const { cart, isLoading } = useCart(pincode);
+  const { cart, isLoading, signedIn, error, refetch } = useCart();
   const actions = useCartActions();
   const t = (en: string, ml: string) => (lang === "en" ? en : ml);
 
@@ -36,9 +34,20 @@ export function CartFull() {
     );
   }
 
+  if (error)
+    return (
+      <div className="container-page space-y-4 py-8">
+        <Alert tone="warning">
+          Your items are saved. We could not load current prices. Please try again.
+        </Alert>
+        <Button onClick={() => refetch()}>Retry loading basket</Button>
+      </div>
+    );
+
   if (!cart || cart.items.length === 0) {
     return (
       <div className="container-page py-10">
+        <UnavailableCartNotice cart={cart} signedIn={signedIn} />
         <EmptyState
           title={t("Your cart is empty", "കൊട്ട ശൂന്യമാണ്")}
           description={t("Fresh vegetables are waiting for you.", "പുത്തൻ പച്ചക്കറികൾ കാത്തിരിക്കുന്നു.")}
@@ -51,6 +60,7 @@ export function CartFull() {
   return (
     <div className="container-page grid gap-6 py-6 lg:grid-cols-[1fr_360px]">
       <div className="space-y-4">
+        <UnavailableCartNotice cart={cart} signedIn={signedIn} />
         <h1 className="text-2xl font-extrabold tracking-tight text-ink">
           {t("Your cart", "നിങ്ങളുടെ കൊട്ട")} ({cart.itemCount})
         </h1>
@@ -78,9 +88,13 @@ export function CartFull() {
           {cart.items.map((line) => (
             <li key={line.variantId} className="flex gap-4 p-4">
               {line.imageUrl ? (
-                <img src={line.imageUrl} alt="" className="h-20 w-20 rounded-xl object-cover" />
+                <img
+                  src={line.imageUrl}
+                  alt=""
+                  className="h-12 w-12 sm:h-20 sm:w-20 rounded-xl object-cover"
+                />
               ) : null}
-              <div className="flex flex-1 flex-col gap-1.5">
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-bold text-ink">{lang === "en" ? line.nameEn : line.nameMl}</p>
@@ -91,7 +105,7 @@ export function CartFull() {
                   </div>
                   <Money paise={line.lineTotalPaise} className="text-base font-extrabold text-primary-700" />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-1">
                   <QuantityStepper
                     value={line.quantity}
                     min={0}
@@ -139,7 +153,7 @@ export function CartFull() {
               <dt className="text-muted">{t("Delivery", "ഡെലിവറി")}</dt>
               <dd>
                 {totals?.deliveryFeePaise == null ? (
-                  <span className="text-xs text-muted">{t("at checkout", "ചെക്കൗട്ടിൽ")}</span>
+                  <span className="text-xs text-muted">{t("Confirmed on WhatsApp", "ചെക്കൗട്ടിൽ")}</span>
                 ) : totals.deliveryFeePaise === 0 ? (
                   <span className="font-bold text-primary-700">{t("FREE", "സൗജന്യം")}</span>
                 ) : (
@@ -159,18 +173,11 @@ export function CartFull() {
           </dl>
           {!signedIn ? (
             <Alert tone="info">
-              {t(
-                "Login with your phone at checkout — your cart comes along.",
-                "ചെക്കൗട്ടിൽ ലോഗിൻ ചെയ്യൂ — കൊട്ട നിലനിൽക്കും.",
-              )}
+              {t("Checkout as a guest — no account or OTP needed.", "അക്കൗണ്ടോ OTP-യോ ഇല്ലാതെ ഓർഡർ ചെയ്യാം.")}
             </Alert>
           ) : null}
-          <Button
-            size="lg"
-            className="w-full"
-            onClick={() => router.push(signedIn ? "/checkout" : "/login?next=/checkout")}
-          >
-            {t("Proceed to checkout", "ചെക്കൗട്ടിലേക്ക്")}
+          <Button size="lg" className="w-full" onClick={() => router.push("/checkout")}>
+            {t("Continue to WhatsApp checkout", "ചെക്കൗട്ടിലേക്ക്")}
           </Button>
           <Link href="/" className="block text-center text-xs font-semibold text-primary-700 underline">
             {t("Continue shopping", "ഷോപ്പിംഗ് തുടരുക")}

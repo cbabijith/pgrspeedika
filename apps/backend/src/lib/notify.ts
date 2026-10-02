@@ -2,6 +2,7 @@ import { getEnv } from "../env";
 import { childLogger } from "./logger";
 
 export interface OutboundMessage {
+  idempotencyKey?: string;
   channel: "sms" | "whatsapp" | "email" | "inapp";
   to: string | null;
   title: string;
@@ -47,7 +48,10 @@ class WebhookProvider implements NotificationProvider {
     }
     const res = await fetch(parsed, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...(message.idempotencyKey ? { "idempotency-key": message.idempotencyKey } : {}),
+      },
       body: JSON.stringify(message),
       signal: AbortSignal.timeout(10_000),
     });

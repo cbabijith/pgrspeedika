@@ -29,6 +29,20 @@
       "when": 1790839216543,
       "tag": "0003_clever_nebula",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790932595247,
+      "tag": "0004_kottayam_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790932695247,
+      "tag": "0005_whatsapp_requests",
+      "breakpoints": true
     }
   ]
 }

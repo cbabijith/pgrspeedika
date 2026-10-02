@@ -2,15 +2,17 @@ import { newHono } from "../lib/hono";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { addresses } from "@pgrs/db";
-import { addressInputSchema, placeOrderSchema, zoneCheckSchema } from "@pgrs/contracts";
+import { timingSafeEqual } from "node:crypto";
+import { addresses, orders, settings } from "@pgrs/db";
+import { addressInputSchema, guestOrderSchema, placeOrderSchema, zoneCheckSchema } from "@pgrs/contracts";
 import type { AppContext } from "../lib/app-context";
-import { conflict, notFound, ok } from "../lib/errors";
+import { conflict, notFound, ok, unauthorized } from "../lib/errors";
 import { requireAuth } from "../lib/context";
 import { rateLimit, RATE_LIMITS } from "../lib/rate-limit";
 import { activeZones } from "../services/catalog";
 import { istTodayDateString, slotAvailabilityForDate, isValidDateString } from "../services/slots";
-import { ensureProviderOrder, placeOrder } from "../services/orders";
+import { ensureProviderOrder, getOrderDTO, placeOrder } from "../services/orders";
+import { guestOrderToken, placeWhatsAppOrder } from "../services/whatsapp-orders";
 import { getCartDTO } from "../services/cart";
 
 const slotsQuery = z.object({
@@ -55,6 +57,61 @@ export function checkoutRoutes(ctx: AppContext) {
           if (!isValidDateString(date))
             return c.json({ ok: false as const, code: "VALIDATION_ERROR", message: "Invalid date" }, 400);
           return c.json(ok(await slotAvailabilityForDate(ctx.db, date)));
+        },
+      )
+      .post(
+        "/api/checkout/guest",
+        zValidator("json", guestOrderSchema, (result, c) => {
+          if (!result.success)
+            return c.json(
+              {
+                ok: false as const,
+                code: "VALIDATION_ERROR",
+                message: "Complete your order details",
+                details: result.error.flatten().fieldErrors,
+              },
+              400,
+            );
+        }),
+        async (c) => {
+          rateLimit(`guest-checkout:${c.get("ip")}`, RATE_LIMITS.checkout);
+          const result = await placeWhatsAppOrder(
+            {
+              db: ctx.db,
+              source: "web",
+              guestTokenSecret: ctx.env.BETTER_AUTH_SECRET,
+              shopWhatsApp: async () => {
+                const [row] = await ctx.db.select().from(settings).where(eq(settings.key, "shop.profile"));
+                return (row?.value as { whatsapp?: string } | undefined)?.whatsapp ?? "";
+              },
+            },
+            c.req.valid("json"),
+          );
+          c.header("cache-control", "private, no-store");
+          return c.json(ok(result), 201);
+        },
+      )
+      .get(
+        "/api/checkout/guest/:id",
+        zValidator("query", z.object({ token: z.string().regex(/^[a-f0-9]{64}$/) }), (result, c) => {
+          if (!result.success)
+            return c.json(
+              { ok: false as const, code: "UNAUTHORIZED", message: "Private order link required" },
+              401,
+            );
+        }),
+        async (c) => {
+          if (!z.string().uuid().safeParse(c.req.param("id")).success) throw notFound("Order not found");
+          const [order] = await ctx.db
+            .select()
+            .from(orders)
+            .where(eq(orders.id, c.req.param("id")));
+          if (!order || order.userId || !order.idempotencyKey) throw notFound("Order not found");
+          const expected = guestOrderToken(ctx.env.BETTER_AUTH_SECRET, order.id, order.idempotencyKey);
+          if (!timingSafeEqual(Buffer.from(expected), Buffer.from(c.req.valid("query").token)))
+            throw unauthorized("Invalid order link");
+          c.header("cache-control", "private, no-store");
+          return c.json(ok(await getOrderDTO(ctx.db, order.id)));
         },
       )
       // ── Addresses ───────────────────────────────────────────────────────────

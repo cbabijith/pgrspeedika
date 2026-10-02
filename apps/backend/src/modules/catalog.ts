@@ -1,8 +1,8 @@
 import { newHono } from "../lib/hono";
 import { zValidator } from "@hono/zod-validator";
 import { and, desc, eq } from "drizzle-orm";
-import { listProductsQuerySchema } from "@pgrs/contracts";
-import { products, reviews, user } from "@pgrs/db";
+import { listProductsQuerySchema, shopSettingsSchema } from "@pgrs/contracts";
+import { products, reviews, settings, user } from "@pgrs/db";
 import type { AppContext } from "../lib/app-context";
 import { notFound, ok } from "../lib/errors";
 import {
@@ -17,6 +17,14 @@ import { productRatingSummary } from "../services/catalog";
 export function catalogRoutes(ctx: AppContext) {
   return (
     newHono()
+      .get("/api/shop", async (c) => {
+        const [row] = await ctx.db.select().from(settings).where(eq(settings.key, "shop.profile"));
+        const parsed = shopSettingsSchema.safeParse(row?.value ?? {});
+        if (!parsed.success) return c.json(ok(null));
+        const { gstin, ...profile } = parsed.data;
+        void gstin;
+        return c.json(ok(profile));
+      })
       .get("/api/catalog/categories", async (c) => {
         return c.json(ok(await listCategories(ctx.db)));
       })

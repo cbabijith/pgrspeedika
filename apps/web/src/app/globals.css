@@ -1,13 +1,14 @@
 @import "tailwindcss";
 @import "@pgrs/config/tailwind-theme.css";
-@source "../../packages/ui/src/**/*.{ts,tsx}";
-@source "./src/**/*.{ts,tsx}";
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";
+@source "../**/*.{ts,tsx}";
 
 @layer base {
   html {
     scroll-behavior: smooth;
   }
   body {
+    padding-bottom: 90px;
     background:
       radial-gradient(1200px 400px at 50% -200px, var(--color-primary-50), transparent), var(--color-page);
     min-height: 100dvh;
@@ -44,5 +45,21 @@
   }
   .skip-link:focus {
     left: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  body {
+    padding-bottom: calc(140px + env(safe-area-inset-bottom));
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 }

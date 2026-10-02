@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/account", "/cart", "/checkout", "/orders", "/login", "/search"],
+        disallow: ["/account", "/cart", "/checkout", "/orders", "/guest-orders", "/login", "/search"],
       },
     ],
     sitemap: `${base}/sitemap.xml`,

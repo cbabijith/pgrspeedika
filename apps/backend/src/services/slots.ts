@@ -2,7 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@pgrs/db";
 import { deliverySlots, settings, slotBookings } from "@pgrs/db";
 import type { SlotAvailability } from "@pgrs/contracts";
-import { notFound, slotUnavailable } from "../lib/errors";
+import { badRequest, notFound, slotUnavailable } from "../lib/errors";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type DbOrTx = Database | Tx;
@@ -14,6 +14,16 @@ export async function getHolidayDates(db: DbOrTx): Promise<string[]> {
   const [row] = await db.select().from(settings).where(eq(settings.key, HOLIDAYS_KEY));
   const value = row?.value as { dates?: unknown } | undefined;
   return Array.isArray(value?.dates) ? (value!.dates as string[]) : [];
+}
+
+async function isShopClosedDate(db: DbOrTx, date: string): Promise<boolean> {
+  if ((await getHolidayDates(db)).includes(date)) return true;
+  const [profile] = await db.select().from(settings).where(eq(settings.key, "shop.profile"));
+  const weeklyClosedDay = (profile?.value as { weeklyClosedDay?: string } | undefined)?.weeklyClosedDay;
+  const day = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "UTC" })
+    .format(new Date(`${date}T00:00:00Z`))
+    .toLowerCase();
+  return day === weeklyClosedDay;
 }
 
 export async function saveHolidayDates(db: Database, dates: string[]): Promise<string[]> {
@@ -39,7 +49,11 @@ export function istTodayDateString(now = new Date()): string {
 }
 
 export function isValidDateString(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+  return (
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) &&
+    new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
+  );
 }
 
 function istMinutesNow(now = new Date()): number {
@@ -59,14 +73,14 @@ function istMinutesNow(now = new Date()): number {
  * in the past.
  */
 export async function slotAvailabilityForDate(
-  db: Database,
+  db: DbOrTx,
   date: string,
   now = new Date(),
 ): Promise<SlotAvailability[]> {
+  if (!isValidDateString(date)) throw badRequest("Invalid delivery date");
   const slots = await db.select().from(deliverySlots).where(eq(deliverySlots.isActive, true));
   const bookings = await db.select().from(slotBookings).where(eq(slotBookings.bookingDate, date));
-  const holidays = await getHolidayDates(db);
-  const closed = holidays.includes(date);
+  const closed = await isShopClosedDate(db, date);
   const minutesNow = istMinutesNow(now);
   const today = istTodayDateString(now);
 
@@ -99,11 +113,12 @@ export async function slotAvailabilityForDate(
  * only while below capacity. Concurrent orders cannot oversell the slot.
  */
 export async function bookSlot(tx: Tx, slotId: string, date: string, now = new Date()): Promise<void> {
+  if (!isValidDateString(date)) throw badRequest("Invalid delivery date");
   const [slot] = await tx.select().from(deliverySlots).where(eq(deliverySlots.id, slotId));
   if (!slot || !slot.isActive) throw notFound("Delivery slot not found");
   if (date < istTodayDateString(now)) throw slotUnavailable("This delivery date is in the past");
-  if ((await getHolidayDates(tx)).includes(date)) {
-    throw slotUnavailable("The shop is closed on this date (holiday)");
+  if (await isShopClosedDate(tx, date)) {
+    throw slotUnavailable("The shop is closed on this date");
   }
 
   const availability = await slotAvailabilityForDateUsingTx(tx, slot, date, now);
@@ -147,7 +162,7 @@ async function slotAvailabilityForDateUsingTx(
   const today = istTodayDateString(now);
   const cutoffPassed = date <= today && slot.startMinutes - slot.cutoffMinutes <= minutesNow;
   const remaining = Math.max(0, slot.capacity - booked);
-  const closed = (await getHolidayDates(tx)).includes(date);
+  const closed = await isShopClosedDate(tx, date);
   return {
     cutoffPassed,
     closed,

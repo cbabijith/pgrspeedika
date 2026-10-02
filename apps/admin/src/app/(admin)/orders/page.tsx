@@ -36,6 +36,7 @@ interface OrderRow {
 }
 
 const COLUMNS: Array<{ status: OrderStatus; title: string }> = [
+  { status: "awaiting_confirmation", title: "WhatsApp requests" },
   { status: "confirmed", title: "To pack" },
   { status: "packed", title: "Packed" },
   { status: "out_for_delivery", title: "Out for delivery" },
@@ -82,15 +83,26 @@ export default function OrdersPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-extrabold tracking-tight text-ink">Orders</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-44 py-1.5 text-xs">
+          <Select
+            aria-label="Filter by status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="w-44 py-1.5 text-xs"
+          >
             <option value="">All statuses</option>
-            {["pending_payment", "confirmed", "packed", "out_for_delivery", "delivered", "cancelled"].map(
-              (s) => (
-                <option key={s} value={s}>
-                  {s.replaceAll("_", " ")}
-                </option>
-              ),
-            )}
+            {[
+              "awaiting_confirmation",
+              "pending_payment",
+              "confirmed",
+              "packed",
+              "out_for_delivery",
+              "delivered",
+              "cancelled",
+            ].map((s) => (
+              <option key={s} value={s}>
+                {s.replaceAll("_", " ")}
+              </option>
+            ))}
           </Select>
           <Input
             type="date"
@@ -119,127 +131,165 @@ export default function OrdersPage() {
         </div>
       </header>
 
-      <Tabs defaultValue="kanban">
-        <TabsList>
-          <TabsTrigger value="kanban">
-            <span className="inline-flex items-center gap-1.5">
-              <KanbanSquare className="h-3.5 w-3.5" aria-hidden /> Board
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="table">
-            <span className="inline-flex items-center gap-1.5">
-              <Table2 className="h-3.5 w-3.5" aria-hidden /> Table
-            </span>
-          </TabsTrigger>
-        </TabsList>
+      <div className="space-y-3 md:hidden">
+        {orders.isLoading ? (
+          <p>Loading orders…</p>
+        ) : orders.error ? (
+          <p role="alert">{orders.error.message}</p>
+        ) : items.length === 0 ? (
+          <p className="rounded-xl bg-white p-5 text-sm text-muted">No orders match these filters.</p>
+        ) : (
+          items.map((o) => (
+            <Link
+              key={o.id}
+              href={`/orders/${o.id}`}
+              className="block space-y-2 rounded-card border border-line bg-white p-4 shadow-card"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-extrabold">{o.orderNumber}</h2>
+                <Money
+                  paise={o.finalGrandTotalPaise ?? o.grandTotalPaise}
+                  className="font-bold text-primary-700"
+                />
+              </div>
+              <p className="text-sm text-muted">
+                {o.itemCount} items · {o.slotLabelEn} · {o.slotDate}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <StatusBadge status={o.status} />
+                <Badge tone="outline">{o.source === "whatsapp" ? "WhatsApp" : "Website"}</Badge>
+                <Badge tone={o.paymentStatus === "paid" ? "green" : "amber"}>
+                  {o.paymentStatus === "paid" ? "Paid" : "Cash on delivery"}
+                </Badge>
+              </div>
+            </Link>
+          ))
+        )}
+      </div>
+      <div className="hidden md:block">
+        <Tabs defaultValue="kanban">
+          <TabsList>
+            <TabsTrigger value="kanban">
+              <span className="inline-flex items-center gap-1.5">
+                <KanbanSquare className="h-3.5 w-3.5" aria-hidden /> Board
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="table">
+              <span className="inline-flex items-center gap-1.5">
+                <Table2 className="h-3.5 w-3.5" aria-hidden /> Table
+              </span>
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="kanban">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {COLUMNS.map((col) => (
-              <section
-                key={col.status}
-                aria-label={col.title}
-                className="rounded-card bg-white p-3 shadow-card"
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-sm font-bold text-ink">{col.title}</p>
-                  <Badge tone="outline">{byStatus.get(col.status)?.length ?? 0}</Badge>
-                </div>
-                <div className="space-y-2">
-                  {(byStatus.get(col.status) ?? []).map((o) => (
-                    <Link
-                      key={o.id}
-                      href={`/orders/${o.id}`}
-                      className="block rounded-xl border border-line p-3 transition-colors hover:border-primary-300 hover:bg-primary-50"
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-extrabold text-ink">{o.orderNumber}</p>
-                        <Money
-                          paise={o.finalGrandTotalPaise ?? o.grandTotalPaise}
-                          className="text-xs font-bold text-primary-700"
-                        />
-                      </div>
-                      <p className="mt-1 text-xs text-muted">
-                        {o.itemCount} items · {o.slotLabelEn}
-                      </p>
-                      <div className="mt-1.5 flex items-center gap-1.5">
-                        {o.paymentMethod === "cod" ? (
-                          <Badge tone="amber">COD</Badge>
-                        ) : (
-                          <Badge tone="green">Paid</Badge>
-                        )}
-                        {o.paymentStatus === "pending" && o.paymentMethod === "razorpay" ? (
-                          <Badge tone="red">Unpaid</Badge>
-                        ) : null}
-                      </div>
-                    </Link>
-                  ))}
-                  {(byStatus.get(col.status)?.length ?? 0) === 0 ? (
-                    <p className="py-6 text-center text-xs text-muted">—</p>
-                  ) : null}
-                </div>
-              </section>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="table">
-          <div className="overflow-x-auto rounded-card border border-line bg-white shadow-card">
-            <table className="table-base">
-              <thead>
-                <tr>
-                  <th>Order</th>
-                  <th>Source</th>
-                  <th>Placed</th>
-                  <th>Slot</th>
-                  <th>Items</th>
-                  <th>Payment</th>
-                  <th>Total</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((o) => (
-                  <tr key={o.id}>
-                    <td className="font-bold text-ink">{o.orderNumber}</td>
-                    <td className="text-muted">
-                      {new Date(o.placedAt).toLocaleString("en-IN", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      })}
-                    </td>
-                    <td className="text-muted">
-                      {o.slotLabelEn} · {o.slotDate}
-                    </td>
-                    <td className="tabular-nums">{o.itemCount}</td>
-                    <td>
-                      {o.paymentMethod === "cod" ? (
-                        <Badge tone="amber">COD {o.paymentStatus === "paid" ? "✓" : ""}</Badge>
-                      ) : (
-                        <Badge tone="green">{o.paymentStatus === "paid" ? "Paid" : o.paymentStatus}</Badge>
-                      )}
-                    </td>
-                    <td>
-                      <Money paise={o.finalGrandTotalPaise ?? o.grandTotalPaise} className="font-bold" />
-                    </td>
-                    <td>
-                      <StatusBadge status={o.status} />
-                    </td>
-                    <td>
-                      <Link href={`/orders/${o.id}`}>
-                        <Button size="sm" variant="outline">
-                          Open
-                        </Button>
+          <TabsContent value="kanban">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {COLUMNS.map((col) => (
+                <section
+                  key={col.status}
+                  aria-label={col.title}
+                  className="rounded-card bg-white p-3 shadow-card"
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-bold text-ink">{col.title}</p>
+                    <Badge tone="outline">{byStatus.get(col.status)?.length ?? 0}</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {(byStatus.get(col.status) ?? []).map((o) => (
+                      <Link
+                        key={o.id}
+                        href={`/orders/${o.id}`}
+                        className="block rounded-xl border border-line p-3 transition-colors hover:border-primary-300 hover:bg-primary-50"
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-extrabold text-ink">{o.orderNumber}</p>
+                          <Money
+                            paise={o.finalGrandTotalPaise ?? o.grandTotalPaise}
+                            className="text-xs font-bold text-primary-700"
+                          />
+                        </div>
+                        <p className="mt-1 text-xs text-muted">
+                          {o.itemCount} items · {o.slotLabelEn}
+                        </p>
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          {o.paymentMethod === "cod" ? (
+                            <Badge tone="amber">COD</Badge>
+                          ) : (
+                            <Badge tone="green">Paid</Badge>
+                          )}
+                          {o.paymentStatus === "pending" && o.paymentMethod === "razorpay" ? (
+                            <Badge tone="red">Unpaid</Badge>
+                          ) : null}
+                        </div>
                       </Link>
-                    </td>
+                    ))}
+                    {(byStatus.get(col.status)?.length ?? 0) === 0 ? (
+                      <p className="py-6 text-center text-xs text-muted">—</p>
+                    ) : null}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="table">
+            <div className="overflow-x-auto rounded-card border border-line bg-white shadow-card">
+              <table className="table-base">
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Source</th>
+                    <th>Placed</th>
+                    <th>Slot</th>
+                    <th>Items</th>
+                    <th>Payment</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </TabsContent>
-      </Tabs>
+                </thead>
+                <tbody>
+                  {items.map((o) => (
+                    <tr key={o.id}>
+                      <td className="font-bold text-ink">{o.orderNumber}</td>
+                      <td>{o.source === "whatsapp" ? "WhatsApp" : "Website"}</td>
+                      <td className="text-muted">
+                        {new Date(o.placedAt).toLocaleString("en-IN", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </td>
+                      <td className="text-muted">
+                        {o.slotLabelEn} · {o.slotDate}
+                      </td>
+                      <td className="tabular-nums">{o.itemCount}</td>
+                      <td>
+                        {o.paymentMethod === "cod" ? (
+                          <Badge tone="amber">COD {o.paymentStatus === "paid" ? "✓" : ""}</Badge>
+                        ) : (
+                          <Badge tone="green">{o.paymentStatus === "paid" ? "Paid" : o.paymentStatus}</Badge>
+                        )}
+                      </td>
+                      <td>
+                        <Money paise={o.finalGrandTotalPaise ?? o.grandTotalPaise} className="font-bold" />
+                      </td>
+                      <td>
+                        <StatusBadge status={o.status} />
+                      </td>
+                      <td>
+                        <Link href={`/orders/${o.id}`}>
+                          <Button size="sm" variant="outline">
+                            Open
+                          </Button>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

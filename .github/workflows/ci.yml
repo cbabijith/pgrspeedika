@@ -106,7 +106,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: pnpm --filter web exec playwright install --with-deps chromium
+        run: pnpm --filter @pgrs/web exec playwright install --with-deps chromium
 
       - name: Apply migrations and seed
         run: |
@@ -118,4 +118,4 @@ jobs:
           SEED_OWNER_PASSWORD="$PW" pnpm db:seed
 
       - name: Build and run E2E
-        run: pnpm --filter web test:e2e:ci
+        run: pnpm --filter @pgrs/web test:e2e:ci

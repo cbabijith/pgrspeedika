@@ -4,9 +4,9 @@ import { HomeContent } from "@/components/home-content";
 import type { Category, ProductCard } from "@pgrs/contracts";
 
 export const metadata: Metadata = {
-  title: "PGRS Peedika · Fresh vegetables & groceries delivered in Kannur",
+  title: "PGRS Peedika · Fresh vegetables & groceries delivered in Kottayam district",
   description:
-    "Farm-fresh vegetables, fruits, rice, spices and daily groceries with morning and evening delivery slots across Kannur and Kasaragod.",
+    "Farm-fresh vegetables, fruits, rice, spices and daily groceries with morning and evening delivery slots in Kottayam district.",
 };
 
 export const revalidate = 120;

@@ -19,6 +19,7 @@ import { requireStaff } from "../../lib/context";
 import { writeAudit } from "../../lib/audit";
 import {
   cancelOrder,
+  confirmWhatsAppRequest,
   getOrderDTO,
   listOrderSummaries,
   packOrder,
@@ -28,6 +29,7 @@ import {
 import { buildOrderPdf } from "../../services/invoice";
 
 const statusValues = [
+  "awaiting_confirmation",
   "pending_payment",
   "confirmed",
   "packed",
@@ -74,7 +76,13 @@ export function adminOrderRoutes(ctx: AppContext) {
       )
       .get("/orders/board", requireStaff(ctx, "orders:view"), async (c) => {
         const date = c.req.query("date");
-        const statuses: OrderStatus[] = ["confirmed", "packed", "out_for_delivery", "delivered"];
+        const statuses: OrderStatus[] = [
+          "awaiting_confirmation",
+          "confirmed",
+          "packed",
+          "out_for_delivery",
+          "delivered",
+        ];
         const result = await listOrderSummaries(ctx.db, {
           statuses,
           date,
@@ -82,6 +90,7 @@ export function adminOrderRoutes(ctx: AppContext) {
           pageSize: 200,
         });
         const columns: Record<string, typeof result.items> = {
+          awaiting_confirmation: [],
           confirmed: [],
           packed: [],
           out_for_delivery: [],
@@ -97,6 +106,37 @@ export function adminOrderRoutes(ctx: AppContext) {
       })
 
       // ── Packing with weight adjustment ─────────────────────────────────────
+      .post(
+        "/orders/:id/confirm",
+        requireStaff(ctx, "orders:manage"),
+        zValidator(
+          "json",
+          z.object({
+            deliveryFeePaise: z.number().int().min(0).max(100000),
+            deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+            deliveryNote: z.string().trim().min(2).max(120),
+          }),
+        ),
+        async (c) => {
+          const dto = await confirmWhatsAppRequest(ctx, {
+            ...c.req.valid("json"),
+            orderId: c.req.param("id"),
+            actor: c.get("user"),
+          });
+          await writeAudit(ctx.db, {
+            actor: c.get("user"),
+            action: "order.confirm",
+            entityType: "order",
+            entityId: dto.id,
+            after: {
+              deliveryFeePaise: dto.deliveryFeePaise,
+              slotDate: dto.slotDate,
+              slotLabelEn: dto.slotLabelEn,
+            },
+          });
+          return c.json(ok(dto));
+        },
+      )
       .post(
         "/orders/:id/pack",
         requireStaff(ctx, "orders:pack"),

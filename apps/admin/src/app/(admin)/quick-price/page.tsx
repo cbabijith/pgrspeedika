@@ -4,8 +4,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Percent, Save } from "lucide-react";
-import { Badge, Button, Card, Input, Money, Select } from "@pgrs/ui";
-import { formatINR } from "@pgrs/contracts";
+import { Badge, Button, Card, Field, Input, Money, Select } from "@pgrs/ui";
 import { api, unwrap } from "@/lib/api";
 
 interface AdminVariant {
@@ -33,6 +32,7 @@ function packPriceFromPerKg(perKgPaise: number, baseQuantity: number): number {
 
 /** Current effective ₹/kg rate of a product (from its 1 kg pack, else derived). */
 function currentPerKg(product: AdminProduct, edits: Record<string, number>): number | null {
+  if (product.sellingType !== "loose") return null;
   const weightVariants = product.variants.filter((v) => v.unitType === "weight");
   if (weightVariants.length === 0) return null;
   const kilo = weightVariants.find((v) => v.baseQuantity === 1000);
@@ -44,7 +44,7 @@ function currentPerKg(product: AdminProduct, edits: Record<string, number>): num
 /** Daily price board: ₹/kg editing for loose items, bulk %, one save. */
 export default function QuickPricePage() {
   const queryClient = useQueryClient();
-  const [categoryFilter, setCategoryFilter] = useState("vegetables");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [edits, setEdits] = useState<Record<string, number>>({});
   const [bulkPercent, setBulkPercent] = useState("-5");
@@ -75,7 +75,10 @@ export default function QuickPricePage() {
   /** Set a ₹/kg rate: every weight pack of the product is recalculated. */
   function setPerKg(product: AdminProduct, rupees: string) {
     const perKgPaise = Math.round(Number(rupees) * 100);
-    if (Number.isNaN(perKgPaise)) return;
+    if (!Number.isFinite(perKgPaise) || perKgPaise < 0) {
+      toast.error("Enter a valid price");
+      return;
+    }
     setEdits((prev) => {
       const next = { ...prev };
       for (const v of product.variants) {
@@ -122,12 +125,11 @@ export default function QuickPricePage() {
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+      <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 bg-surface-muted py-2">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight text-ink">Quick price update</h1>
           <p className="text-sm text-muted">
-            Daily market board — type one <strong>₹/kg</strong> rate and every pack size (250 g / 500 g / 1 kg
-            / 2 kg) updates itself. Save once when done.
+            Set a ₹/kg rate for loose produce, or a price per pack for groceries. Save all changes when done.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -188,97 +190,84 @@ export default function QuickPricePage() {
         </div>
       </Card>
 
-      <div className="overflow-x-auto rounded-card border border-line bg-white shadow-card">
-        <table className="table-base">
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>₹ per kg</th>
-              <th>Pack</th>
-              <th>Current price</th>
-              <th>New price (₹)</th>
-              <th>Change</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((p) =>
-              p.variants.map((v, idx) => {
-                const current = edits[v.id] ?? v.pricePaise;
-                const edited = edits[v.id] != null;
-                const isKg = v.unitType === "weight";
-                const perKg = isKg ? currentPerKg(p, edits) : null;
-                return (
-                  <tr key={v.id} className={idx === 0 ? "border-t-2 border-line" : ""}>
-                    {idx === 0 ? (
-                      <td rowSpan={p.variants.length} className="align-top font-semibold text-ink">
-                        {p.nameEn}
-                        <span className="block text-xs font-normal text-muted">{p.nameMl}</span>
-                      </td>
-                    ) : null}
-                    {idx === 0 ? (
-                      <td rowSpan={p.variants.length} className="align-top">
-                        {isKg && perKg != null ? (
-                          <Input
-                            className="w-24 py-1 font-bold"
-                            inputMode="decimal"
-                            defaultValue={(perKg / 100).toFixed(0)}
-                            key={`${p.id}-${perKg}`}
-                            aria-label={`Price per kg for ${p.nameEn}`}
-                            onBlur={(e) => {
-                              if (e.target.value.trim() === "") return;
-                              setPerKg(p, e.target.value);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                            }}
-                          />
-                        ) : (
-                          <span className="text-xs text-muted">pack</span>
-                        )}
-                      </td>
-                    ) : null}
-                    <td className="text-muted">{v.labelEn}</td>
-                    <td>
-                      <Money
-                        paise={v.pricePaise}
-                        className={edited ? "text-muted line-through" : "font-bold"}
-                      />
-                    </td>
-                    <td>
-                      <Input
-                        className="w-24 py-1"
-                        inputMode="decimal"
-                        value={(current / 100).toFixed(2)}
-                        aria-label={`New price for ${p.nameEn} ${v.labelEn}`}
-                        onChange={(e) => {
-                          const paise = Math.round(Number(e.target.value) * 100);
-                          if (Number.isNaN(paise)) return;
-                          setEdits((prev) => ({ ...prev, [v.id]: Math.max(0, paise) }));
-                        }}
-                      />
-                    </td>
-                    <td>
-                      {edited ? (
-                        <Badge tone={current < v.pricePaise ? "green" : "amber"}>
-                          {formatINR(current - v.pricePaise)}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              }),
-            )}
-            {visible.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-10 text-center text-muted">
-                  No products match the filters.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div className="grid gap-3 xl:grid-cols-2">
+        {products.error ? (
+          <p role="alert">{products.error.message}</p>
+        ) : products.isLoading ? (
+          <p>Loading prices…</p>
+        ) : visible.length === 0 ? (
+          <p>No products match the filters.</p>
+        ) : null}
+        {visible.map((p) => {
+          const perKg = currentPerKg(p, edits);
+          return (
+            <Card key={p.id} className="space-y-3 p-4" aria-label={p.nameEn}>
+              <div>
+                <h2 className="font-bold">{p.nameEn}</h2>
+                <p className="text-xs text-muted">
+                  {p.sellingType === "loose"
+                    ? "Loose produce · priced by weight"
+                    : "Packaged grocery · price per pack"}
+                </p>
+              </div>
+              {perKg != null ? (
+                <Field label={`Price per kg for ${p.nameEn}`}>
+                  <Input
+                    inputMode="decimal"
+                    key={`${p.id}-${perKg}`}
+                    defaultValue={(perKg / 100).toFixed(2)}
+                    onBlur={(e) => {
+                      if (e.target.value.trim()) setPerKg(p, e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    }}
+                  />
+                </Field>
+              ) : null}
+              <div className="space-y-2">
+                {p.variants.map((v) => {
+                  const current = edits[v.id] ?? v.pricePaise;
+                  return (
+                    <div
+                      key={v.id}
+                      className="grid grid-cols-[1fr_120px] items-center gap-3 border-t border-line pt-2"
+                    >
+                      <div>
+                        <p className="text-sm font-bold">{v.labelEn}</p>
+                        <Money paise={v.pricePaise} className="text-xs text-muted" />
+                        {edits[v.id] != null ? (
+                          <p className="text-xs font-bold text-primary-700">
+                            New: <Money paise={current} />
+                          </p>
+                        ) : null}
+                      </div>
+                      <Field label={`New price for ${p.nameEn} ${v.labelEn}`}>
+                        <Input
+                          inputMode="decimal"
+                          key={`${v.id}-${current}`}
+                          defaultValue={(current / 100).toFixed(2)}
+                          onBlur={(e) => {
+                            const paise = Math.round(Number(e.target.value) * 100);
+                            if (!e.target.value.trim() || !Number.isFinite(paise) || paise < 0) {
+                              toast.error("Enter a valid price");
+                              e.target.value = (current / 100).toFixed(2);
+                              return;
+                            }
+                            if (paise !== current) setEdits((prev) => ({ ...prev, [v.id]: paise }));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
+                        />
+                      </Field>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          );
+        })}
       </div>
       <p className="text-xs text-muted">
         {variantRows.length} packs across {visible.length} products shown. Saving records an audit entry (who

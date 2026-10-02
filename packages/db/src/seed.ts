@@ -1,3 +1,4 @@
+import { categoryPhotoSlugs } from "./catalog-photos";
 import { schema, type Database } from "./index";
 import {
   seedCategories,
@@ -8,14 +9,15 @@ import {
   seedZones,
 } from "../scripts/seed-data";
 
-function produceImageUrl(slug: string, emoji: string, nameEn: string): string {
-  const params = new URLSearchParams({ e: emoji, n: nameEn });
-  return `/media/produce/${slug}.svg?${params.toString()}`;
+function produceImageUrl(slug: string, _emoji: string, _nameEn: string): string {
+  return new URL(`/catalog/photos/${slug}.webp`, process.env.WEB_URL ?? "http://localhost:3000").toString();
 }
 
-function categoryImageUrl(slug: string, emoji: string, nameEn: string): string {
-  const params = new URLSearchParams({ e: emoji, n: nameEn });
-  return `/media/category/${slug}.svg?${params.toString()}`;
+function categoryImageUrl(slug: string, _emoji: string, _nameEn: string): string {
+  return new URL(
+    `/catalog/photos/${categoryPhotoSlugs[slug] ?? "tomato"}.webp`,
+    process.env.WEB_URL ?? "http://localhost:3000",
+  ).toString();
 }
 
 function bannerImageUrl(n: number, titleEn: string): string {
@@ -267,10 +269,10 @@ export async function seedCatalog(db: Database): Promise<void> {
       value: {
         name: "PGRS Peedika",
         tagline: "Fresh from our village to your kitchen",
-        phone: "+914901234567",
-        whatsapp: "+919999888877",
+        phone: "+919447114449",
+        whatsapp: "+919447114449",
         email: "hello@pgrspeedika.example",
-        addressLine: "PGRS Peedika, Market Road, Kannur, Kerala 670001",
+        addressLine: "PGRS Peedika, Kottayam district, Kerala",
         gstin: "",
         openTime: "06:30",
         closeTime: "21:30",

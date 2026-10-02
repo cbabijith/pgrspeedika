@@ -7,7 +7,7 @@ export default function AboutPage() {
   return (
     <StaticPage title="About PGRS Peedika" intro="A village shop, online.">
       <p>
-        PGRS Peedika started as a small village store (peedika) on Market Road, Kannur. Every morning we buy
+        PGRS Peedika brings the village store (peedika) experience online for Kottayam district. We offer
         vegetables and fruits from local farmers in and around the district, and stock the rice, grains,
         spices and daily essentials Kerala kitchens rely on.
       </p>
@@ -20,8 +20,8 @@ export default function AboutPage() {
       </ul>
       <h2>Where we deliver</h2>
       <p>
-        We currently serve Kannur town and nearby pincodes (670001, 670007, 670012) and Kasaragod–Kanhangad
-        (671314), and we are growing every month.
+        We currently focus on Kottayam district only. Enter your pincode to check whether your area has
+        delivery available. Delivery fees, minimum orders and available slots are shown at checkout.
       </p>
     </StaticPage>
   );

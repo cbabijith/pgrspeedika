@@ -8,6 +8,7 @@ import {
   staffInviteSchema,
   staffUpdateSchema,
   zoneInputSchema,
+  isKottayamPincode,
 } from "@pgrs/contracts";
 import {
   addresses,
@@ -71,9 +72,20 @@ export function adminPlatformRoutes(ctx: AppContext) {
             return c.json({ ok: false as const, code: "VALIDATION_ERROR", message: "Invalid zone" }, 400);
         }),
         async (c) => {
+          const input = c.req.valid("json");
+          if (input.isActive === true) {
+            const [existing] = await ctx.db
+              .select({ pincode: deliveryZones.pincode })
+              .from(deliveryZones)
+              .where(eq(deliveryZones.id, c.req.param("id")));
+            if (!existing) throw notFound("Zone not found");
+            if (!isKottayamPincode(input.pincode ?? existing.pincode)) {
+              throw badRequest("Delivery is currently limited to Kottayam district");
+            }
+          }
           const [row] = await ctx.db
             .update(deliveryZones)
-            .set({ ...c.req.valid("json"), updatedAt: new Date() })
+            .set({ ...input, updatedAt: new Date() })
             .where(eq(deliveryZones.id, c.req.param("id")))
             .returning();
           if (!row) throw notFound("Zone not found");

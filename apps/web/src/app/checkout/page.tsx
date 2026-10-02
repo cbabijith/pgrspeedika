@@ -1,7 +1,5 @@
-"use client";
-
-import { CheckoutClient } from "@/components/checkout-client";
+import { WhatsAppCheckout } from "@/components/whatsapp-checkout";
 
 export default function CheckoutPage() {
-  return <CheckoutClient />;
+  return <WhatsAppCheckout />;
 }

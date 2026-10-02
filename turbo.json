@@ -22,7 +22,13 @@
     "S3_PUBLIC_URL",
     "STORAGE_DRIVER",
     "SEED_OWNER_EMAIL",
-    "SEED_OWNER_PASSWORD"
+    "SEED_OWNER_PASSWORD",
+    "NEXT_PUBLIC_API_URL",
+    "ENABLE_TEST_OTP",
+    "NOTIFY_PROVIDER",
+    "NOTIFY_WEBHOOK_URL",
+    "WHATSAPP_APP_SECRET",
+    "WHATSAPP_VERIFY_TOKEN"
   ],
   "tasks": {
     "build": {
@@ -42,6 +48,7 @@
       "outputs": []
     },
     "test": {
+      "cache": false,
       "dependsOn": ["^build"]
     },
     "test:watch": {

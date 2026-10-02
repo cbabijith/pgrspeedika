@@ -1,4 +1,5 @@
 export * from "./constants";
+export * from "./delivery-area";
 export * from "./permissions";
 export * from "./money";
 export * from "./weight";

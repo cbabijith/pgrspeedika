@@ -1,8 +1,9 @@
 # PGRS Peedika 🥬
 
 Online store for a local Indian vegetable & grocery shop — fresh produce by
-weight, Kannur/Kasaragod delivery slots, bilingual (English/മലയാളം) catalog,
-Razorpay + cash on delivery, and a full shop-owner admin panel.
+weight, bilingual (English/മലയാളം) catalog, guest-only WhatsApp checkout across
+Kottayam district and a mobile shop-owner panel. Delivery charges and timing are
+agreed with the shop on WhatsApp before the owner confirms the request.
 
 Built as a **pnpm + Turborepo monorepo**:
 
@@ -11,7 +12,8 @@ pgrs-peedika/
 ├─ apps/
 │  ├─ web/        customer storefront  (Next.js 15, React 19)
 │  ├─ admin/      shop owner panel     (Next.js 15, TanStack Table)
-│  └─ backend/    Hono API + event worker (Node)
+│  ├─ backend/    Hono API + shared worker handlers (Node)
+│  └─ worker/     separate outbox worker process
 ├─ packages/
 │  ├─ db/         Drizzle schema, migrations, seed
 │  ├─ contracts/  Zod schemas + shared types (single source of truth)
@@ -21,8 +23,7 @@ pgrs-peedika/
 │  └─ config/     shared tsconfigs, eslint base, prettier, theme tokens
 ```
 
-Dependency flow: `db → contracts → apps`. Apps never import each other; the web
-and admin apps call the backend **only** through the typed Hono RPC client
+The web and admin apps call the backend through the typed Hono RPC client
 (`hc<PublicAppType>` / `hc<AdminAppType>`) wrapped in TanStack Query hooks.
 Zustand holds only the guest cart, UI language, pincode and drawer state.
 
@@ -43,26 +44,81 @@ cp .env.example .env        # then edit DATABASE_URL + BETTER_AUTH_SECRET
 pnpm db:migrate
 pnpm db:seed                # prints/logs owner credentials source
 
-# 4. run everything (web :3000, admin :3001, api :4000)
-pnpm dev                    # add `pnpm --filter @pgrs/backend dev:worker` for events
+# 4. run everything (web :3000, admin :3001, api :4000, plus outbox worker)
+pnpm dev
 ```
 
 Useful scripts:
 
-| command                                       | what it does                                       |
-| --------------------------------------------- | -------------------------------------------------- |
-| `pnpm dev`                                    | web + admin + backend (Turborepo)                  |
-| `pnpm --filter @pgrs/backend dev:worker`      | outbox worker (notifications, counters)            |
-| `pnpm db:generate` / `db:migrate` / `db:seed` | Drizzle migrations + seed                          |
-| `pnpm lint` / `typecheck` / `test` / `build`  | the whole monorepo (CI parity)                     |
-| `pnpm --filter web exec playwright test`      | E2E suite (OTP login, COD checkout, admin packing) |
+| command                                       | what it does                                              |
+| --------------------------------------------- | --------------------------------------------------------- |
+| `pnpm dev`                                    | web + admin + backend + worker (Turborepo)                |
+| `pnpm --filter @pgrs/worker dev`              | run only the outbox worker                                |
+| `pnpm db:generate` / `db:migrate` / `db:seed` | Drizzle migrations + seed                                 |
+| `pnpm lint` / `typecheck` / `test` / `build`  | the whole monorepo (CI parity)                            |
+| `pnpm e2e:isolated`                           | browser suite in a temporary database on separate ports   |
+| `pnpm e2e`                                    | browser suite against explicitly configured test services |
+
+### Run the grocery shop
+
+The public shop accepts guest order requests throughout **Kottayam district**,
+using the [district PIN-code directory](https://kottayam.nic.in/en/std-pin-codes/).
+There is no customer login, OTP or delivery-slot selection in the shopping flow.
+The shop confirms delivery fees and timing on WhatsApp at **+91 94471 14449**.
+
+1. Use Admin → Settings to edit the store name and WhatsApp contact. Add or rename
+   categories and products. Vegetables, Fruits and Groceries have real representative
+   photographs; source and license credits are available at `/photo-credits`.
+2. Enter loose-produce stock in **kg** and packaged stock in **packs**. Use daily
+   Prices to update all weight variants together; inventory records stock corrections.
+3. Customers add multiple products without leaving the list. A persistent bottom
+   basket bar appears immediately and leads to guest checkout.
+4. Checkout takes a name, phone, address, town and Kottayam PIN. It saves a private
+   order request, then redirects to WhatsApp with the complete basket and address.
+   The customer presses **Send** in WhatsApp. Interrupted requests can be retried
+   without duplicating orders; receipts stay on the customer's device.
+5. Requests appear in Admin → Orders as **Awaiting confirmation**. After agreeing
+   delivery on WhatsApp, the owner enters the fee, date and timing and confirms.
+   Confirmation reserves stock atomically. Unconfirmed requests do not reserve it.
+6. Pack using actual weights, send for delivery, record the final cash amount and
+   mark delivered. The customer's private tracking link shows the adjusted bill.
+
+Configured zones, minimum orders and slots remain available for the legacy direct
+checkout APIs; they do not block the public WhatsApp request flow. Automated outbound
+messages require a real notification provider; the default provider only logs them.
+See [WhatsApp setup](docs/whatsapp-ordering.md).
+
+The release step applies migrations and upgrades default photos/categories/contact
+in place. It preserves existing orders, prices, stock and owner-uploaded images.
+Do not enable `SEED_ON_DEPLOY` on an existing store: seeding resets the catalog.
+
+### Implementation audit
+
+The existing project already supplied catalog, inventory, authenticated checkout,
+order fulfilment and an outbox worker. The store completion addressed these gaps:
+
+- Guest checkout is now the default for visitors, with private tracking and order
+  history on their device. A claimed phone number cannot expose saved account details.
+- Web and WhatsApp retries share transaction-safe order numbering and idempotency;
+  duplicate inbound webhook message IDs replay the existing order.
+- Packaged products reserve/consume packs; loose products reserve/consume grams.
+  Concurrent orders, stock corrections, packing and cancellation preserve stock.
+- Product edits preserve variant IDs, SKUs and images, keeping existing carts valid.
+  Hidden categories/products cannot be ordered; products with open orders cannot be deleted.
+- Public requests validate Kottayam PIN codes and current prices. The owner reserves
+  stock only after agreeing delivery. Legacy direct checkout also enforces active zones,
+  minimum orders, holiday closures and slot capacity.
+- Worker database effects and event completion commit together. Provider failures
+  roll back effects and retry; outbound providers receive stable idempotency keys.
+- Shared UI stylesheet paths, browser test commands and integration-test database
+  safeguards were corrected. Private pages are excluded from the offline cache.
 
 ### Test accounts
 
 - **Owner (admin):** email + password from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` in `.env`.
-- **Customers:** any Indian mobile number — sign in at `/login` with phone OTP.
-  In development the OTP is printed in the **backend console**; with
-  `ENABLE_TEST_OTP=true` it is also served at `GET /api/auth/test-otp?phone=…`.
+- **Customers:** guest checkout; no account or OTP is required. Legacy authentication
+  APIs remain available for compatibility. Their test OTP helper must stay disabled
+  in production.
 
 ### Payments without Razorpay keys
 
@@ -111,18 +167,12 @@ signature verification (`x-razorpay-signature` HMAC) is always enforced.
 
 ## Feature map
 
-**Storefront (`apps/web`)** — banner carousel, category grid, fresh-today /
-best-sellers / seasonal rails; **guest WhatsApp ordering** (no account — order
-lands in the admin panel _and_ as a pre-filled WhatsApp message to the shop,
-details saved by phone for repeat orders; see
-[docs/whatsapp-ordering.md](docs/whatsapp-ordering.md)); bilingual instant search (EN + മലയാളം) with
-filters and sorting; product pages with variant selector; guest cart (persisted
-locally) merged into the server cart at OTP login; pincode serviceability gate;
-checkout with addresses, slot availability, coupons, COD/UPI; order tracking
-timeline, final weight-adjusted bill, invoice PDF, one-click reorder,
-cancellation with automatic refund; account, wishlist, notifications;
-About/Contact/FAQ/Privacy/Terms/Refund pages; PWA (manifest + offline shell),
-sitemap, robots, JSON-LD structured data.
+**Storefront (`apps/web`)** — mobile bottom navigation, visible basket shortcut,
+product photographs with credits, bilingual search, category filters, pack selectors
+and quantity controls; guest-only WhatsApp requests with private receipts and tracking;
+delivery agreed with the shop; final weight-adjusted bill; informational pages and
+home-screen manifest. Customer authentication and direct COD/UPI APIs remain for
+compatibility but are not part of the public checkout.
 
 **Admin (`apps/admin`)** — dashboard (orders by status, revenue, new customers,
 low stock, slot utilization, 14-day sales chart); products CRUD with variants,
@@ -145,6 +195,29 @@ input, consistent error envelope, request IDs + structured pino logs, CORS
 locked to known origins, per-IP and per-flow rate limits (OTP, login, checkout),
 idempotency keys for order/payment creation.
 
+## Phone shopping and owner workspace
+
+The storefront has a mobile bottom bar (Home, Shop, Cart, Orders), pack selectors,
+quantity controls in each product card and a live basket shortcut. Adding items on
+lists keeps the shopper on the list. Category filters and Load more retain the
+basket; checkout and WhatsApp orders work without creating an account.
+
+The owner workspace has Orders, Products, Categories, Stock and More in its mobile
+bottom bar. Products link directly to daily Prices and stock management. Product
+and category names are editable, slugs are generated on creation when blank, and
+Malayalam names are optional. Packaged groceries count stock in packs and keep a
+price per pack, including weight-labelled bags; loose produce uses kg stock and
+can have its pack prices recalculated from a daily ₹/kg rate.
+
+For local phone testing, connect the phone to the computer's Wi-Fi network and
+open `http://<computer-LAN-IP>:3000` (shop) or `:3001` (owner). Add both exact LAN
+origins to `CORS_ORIGINS` in the root `.env` and restart the backend. In development,
+when `NEXT_PUBLIC_API_URL` is unset for the frontends, API requests use the browser's
+hostname on port 4000. If you set that variable, use an API hostname reachable from
+the phone. Do not use `localhost` on the phone. Production deployments require the
+configured public API URL and HTTPS. Both sites include home-screen manifests and
+icons; home-screen installation on a deployed site requires HTTPS.
+
 ## Testing
 
 - `pnpm test` — Vitest: INR formatting, GST-inclusive billing, coupon rules,
@@ -154,10 +227,21 @@ idempotency keys for order/payment creation.
   totals/coupon/reservation/outbox, idempotent replay, rejection of unserved
   pincodes and below-minimum carts, packing with actual weights, cancellation
   with stock/slot release) running against the database in `.env.test`
-  (skipped when unreachable).
-- `pnpm --filter web exec playwright test` — Playwright E2E: phone-OTP login,
-  COD checkout end-to-end, admin packing an order with the customer verifying
-  the adjusted bill. Requires `ENABLE_TEST_OTP=true` and the seeded owner.
+  (the database must be available and its name must contain `_test`; tests fail
+  early instead of silently skipping). The store regressions additionally cover
+  private guest access, concurrent retries/stock edits/payments/packing/cancellation,
+  packaged stock, catalog edits, webhook signatures/replays and worker rollback/retry.
+- `pnpm e2e:isolated` — Playwright creates, migrates and seeds a temporary test
+  database, starts API/web/admin on ports 4100/3100/3101, runs the suite and drops
+  that database. The PostgreSQL role needs CREATE DATABASE permission. Override
+  ports with `E2E_API_PORT`, `E2E_WEB_PORT`, `E2E_ADMIN_PORT` if needed. Includes
+  legacy OTP/API compatibility, admin packing, full guest WhatsApp fulfilment with
+  catalog/stock/price forms, mobile validation and interrupted-response retries,
+  guest basket persistence, small-phone catalog paging/quantities/stock limits,
+  desktop/mobile basket visibility and price-service failure recovery, plus mobile
+  owner category rename, pack pricing, stock and order confirmation/fulfilment.
+- `pnpm e2e` — use a separately configured test database and seeded owner, with
+  `ENABLE_TEST_OTP=true`. Do not run the browser fixtures against live store data.
 - `apps/web/scripts/lighthouse-mobile.sh` — Lighthouse **mobile** audit
   (standard simulated 4G throttling) for the Phase 5 ≥90 performance gate.
   Verified on the production build: **home 95 / product 98** performance,
@@ -178,8 +262,8 @@ idempotency keys for order/payment creation.
   `BETTER_AUTH_SECRET` with `openssl rand -base64 32`. Never commit real secrets.
 - Storage defaults to the local-disk driver; set `STORAGE_DRIVER=s3` plus the
   R2/S3 vars and a public `S3_PUBLIC_URL` for production uploads.
-- Run `node dist/index.js` (API) and `node dist/worker/run.js` (worker) from
-  `apps/backend` after `pnpm build`; both are stateless, so scale horizontally
+- Run `pnpm --filter @pgrs/backend start` (API) and
+  `pnpm --filter @pgrs/worker start` (worker) after `pnpm build`; both are stateless, so scale horizontally
   behind a load balancer (swap the in-memory rate limiter for Redis). Web and
   admin bind `$PORT` via plain `next start`.
 - CI (`.github/workflows/ci.yml`) runs migrations + `turbo lint typecheck test

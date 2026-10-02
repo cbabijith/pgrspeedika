@@ -1,6 +1,16 @@
+import { servedZoneCondition } from "./delivery-area";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@pgrs/db";
-import { cartItems, carts, coupons, deliveryZones, inventory, productVariants, products } from "@pgrs/db";
+import {
+  cartItems,
+  carts,
+  categories,
+  coupons,
+  deliveryZones,
+  inventory,
+  productVariants,
+  products,
+} from "@pgrs/db";
 import type { CartDTO, CartLine, CartTotals } from "@pgrs/contracts";
 import { gstFromInclusive } from "@pgrs/contracts";
 import { badRequest, couponInvalid, notFound } from "../lib/errors";
@@ -10,9 +20,15 @@ import { validateCoupon } from "./coupons";
 export async function getOrCreateCart(db: Database, userId: string) {
   const [existing] = await db.select().from(carts).where(eq(carts.userId, userId));
   if (existing) return existing;
-  const [created] = await db.insert(carts).values({ userId }).returning();
-  if (!created) throw new Error("Failed to create cart");
-  return created;
+  const [created] = await db
+    .insert(carts)
+    .values({ userId })
+    .onConflictDoNothing({ target: carts.userId })
+    .returning();
+  if (created) return created;
+  const [concurrent] = await db.select().from(carts).where(eq(carts.userId, userId));
+  if (!concurrent) throw new Error("Failed to create cart");
+  return concurrent;
 }
 
 export async function getCartDTO(db: Database, userId: string, zonePincode?: string): Promise<CartDTO> {
@@ -64,10 +80,7 @@ export async function getCartDTO(db: Database, userId: string, zonePincode?: str
 
   let zone: typeof deliveryZones.$inferSelect | null = null;
   if (zonePincode) {
-    const [z] = await db
-      .select()
-      .from(deliveryZones)
-      .where(and(eq(deliveryZones.pincode, zonePincode), eq(deliveryZones.isActive, true)));
+    const [z] = await db.select().from(deliveryZones).where(servedZoneCondition(zonePincode));
     zone = z ?? null;
   }
 
@@ -139,29 +152,39 @@ export async function addItems(
   items: Array<{ variantId: string; quantity: number }>,
 ): Promise<CartDTO> {
   const cart = await getOrCreateCart(db, userId);
-  for (const item of items) {
-    const [variant] = await db
-      .select({
-        id: productVariants.id,
-        productId: productVariants.productId,
-        isActive: productVariants.isActive,
-      })
-      .from(productVariants)
-      .where(eq(productVariants.id, item.variantId));
-    if (!variant || !variant.isActive) throw notFound("Product variant not found");
-    await db
-      .insert(cartItems)
-      .values({
-        cartId: cart.id,
-        productId: variant.productId,
-        variantId: variant.id,
-        quantity: item.quantity,
-      })
-      .onConflictDoUpdate({
-        target: [cartItems.cartId, cartItems.variantId],
-        set: { quantity: sql`least(${cartItems.quantity} + ${item.quantity}, 99)` },
-      });
-  }
+  await db.transaction(async (tx) => {
+    for (const item of items) {
+      const [variant] = await tx
+        .select({
+          id: productVariants.id,
+          productId: productVariants.productId,
+          isActive: productVariants.isActive,
+        })
+        .from(productVariants)
+        .innerJoin(products, eq(productVariants.productId, products.id))
+        .innerJoin(categories, eq(products.categoryId, categories.id))
+        .where(
+          and(
+            eq(productVariants.id, item.variantId),
+            eq(products.isActive, true),
+            eq(categories.isActive, true),
+          ),
+        );
+      if (!variant || !variant.isActive) throw notFound("Product variant not found");
+      await tx
+        .insert(cartItems)
+        .values({
+          cartId: cart.id,
+          productId: variant.productId,
+          variantId: variant.id,
+          quantity: item.quantity,
+        })
+        .onConflictDoUpdate({
+          target: [cartItems.cartId, cartItems.variantId],
+          set: { quantity: sql`least(${cartItems.quantity} + ${item.quantity}, 99)` },
+        });
+    }
+  });
   return getCartDTO(db, userId);
 }
 

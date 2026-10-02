@@ -12,6 +12,7 @@ export function QuantityStepper({
   size = "md",
   className,
   ariaLabel,
+  disabled = false,
 }: {
   value: number;
   onChange: (value: number) => void;
@@ -20,13 +21,18 @@ export function QuantityStepper({
   size?: "sm" | "md";
   className?: string;
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
-  const btn = size === "sm" ? "h-7 w-7 text-xs" : "h-9 w-9 text-sm";
+  const btn =
+    size === "sm" ? "h-11 w-11 shrink-0 text-xs md:h-7 md:w-7" : "h-11 w-11 shrink-0 text-sm md:h-9 md:w-9";
   return (
     <div
       role="group"
       aria-label={ariaLabel ?? "Quantity"}
-      className={cn("inline-flex items-center gap-1 rounded-full border border-line bg-white p-1", className)}
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-xl border border-line bg-white md:gap-1 md:p-1",
+        className,
+      )}
     >
       <button
         type="button"
@@ -35,7 +41,7 @@ export function QuantityStepper({
           "inline-flex items-center justify-center rounded-full text-primary-700 transition-colors hover:bg-primary-surface disabled:opacity-40",
           btn,
         )}
-        disabled={value <= min}
+        disabled={disabled || value <= min}
         onClick={() => onChange(Math.max(min, value - 1))}
       >
         <Minus className="h-3.5 w-3.5" />
@@ -52,7 +58,7 @@ export function QuantityStepper({
           "inline-flex items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-600 disabled:opacity-40",
           btn,
         )}
-        disabled={value >= max}
+        disabled={disabled || value >= max}
         onClick={() => onChange(Math.min(max, value + 1))}
       >
         <Plus className="h-3.5 w-3.5" />

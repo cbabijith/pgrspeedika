@@ -109,12 +109,12 @@ d("checkout integration (order pipeline)", () => {
       .returning();
     userId = customer!.id;
 
-    // Zone (Kannur town: min ₹99, fee ₹29, free above ₹499)
+    // Zone (Kottayam town: min ₹99, fee ₹29, free above ₹499)
     const [zone] = await db
       .insert(schema.deliveryZones)
       .values({
-        pincode: "670001",
-        areaNameEn: "Kannur Town",
+        pincode: "686001",
+        areaNameEn: "Kottayam Town",
         areaNameMl: "കണ്ണൂർ ടൗൺ",
         minOrderPaise: 9900,
         deliveryFeePaise: 2900,
@@ -259,8 +259,8 @@ d("checkout integration (order pipeline)", () => {
         line1: "IT House, Test Lane",
         line2: null,
         landmark: null,
-        pincode: "670001",
-        city: "Kannur",
+        pincode: "686001",
+        city: "Kottayam",
         isDefault: true,
       },
       slotId,
@@ -282,7 +282,7 @@ d("checkout integration (order pipeline)", () => {
     expect(dto.deliveryFeePaise).toBe(2_900);
     expect(dto.gstTotalPaise).toBeGreaterThan(0); // rice carries 5% inclusive
     expect(dto.items).toHaveLength(2);
-    expect(dto.items.map((i) => i.orderedQtyGrams).sort()).toEqual([1_000, 5_000]);
+    expect(dto.items.map((i) => i.orderedQtyGrams).sort()).toEqual([1, 1_000]);
 
     // Stock reserved, not sold
     const [tomatoInv] = await db!
@@ -329,7 +329,7 @@ d("checkout integration (order pipeline)", () => {
     // Address persisted for the customer
     const addresses = await db!.select().from(schema.addresses);
     expect(addresses).toHaveLength(1);
-    expect(addresses[0]?.pincode).toBe("670001");
+    expect(addresses[0]?.pincode).toBe("686001");
   });
 
   it("replays idempotently for the same key", async () => {
@@ -344,8 +344,8 @@ d("checkout integration (order pipeline)", () => {
         line1: "IT House, Test Lane",
         line2: null,
         landmark: null,
-        pincode: "670001",
-        city: "Kannur",
+        pincode: "686001",
+        city: "Kottayam",
         isDefault: false,
       },
       slotId,
@@ -366,8 +366,8 @@ d("checkout integration (order pipeline)", () => {
         line1: "Different text — must be ignored on replay",
         line2: null,
         landmark: null,
-        pincode: "670001",
-        city: "Kannur",
+        pincode: "686001",
+        city: "Kottayam",
         isDefault: false,
       },
       slotId,
@@ -408,7 +408,7 @@ d("checkout integration (order pipeline)", () => {
         customerNote: null,
         idempotencyKey: "it-order-key-3",
       }),
-    ).rejects.toThrowError(/do not deliver/i);
+    ).rejects.toThrowError(/Kottayam district/i);
 
     // Tomato only (₹30) is below the ₹99 zone minimum.
     await seedCart([{ variantId: tomatoVariantId, quantity: 1 }]);
@@ -422,8 +422,8 @@ d("checkout integration (order pipeline)", () => {
           line1: "IT House",
           line2: null,
           landmark: null,
-          pincode: "670001",
-          city: "Kannur",
+          pincode: "686001",
+          city: "Kottayam",
           isDefault: false,
         },
         slotId,
@@ -508,7 +508,7 @@ d("checkout integration (order pipeline)", () => {
         ),
       );
     expect(riceInv?.reservedQuantity).toBe(0);
-    expect(riceInv?.stockQuantity).toBe(20_000 - 5_000); // key-1 rice committed at pack
+    expect(riceInv?.stockQuantity).toBe(20_000 - 1); // key-1 rice committed at pack
 
     // Slot released for this order (back to 1 booking from key-1).
     const [booking] = await db!

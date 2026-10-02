@@ -3,40 +3,55 @@
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Check } from "lucide-react";
-import { Badge, Money } from "@pgrs/ui";
+import { Plus } from "lucide-react";
+import { Badge, Money, QuantityStepper } from "@pgrs/ui";
 import type { ProductCard as ProductCardData } from "@pgrs/contracts";
-import { useCartActions } from "@/lib/hooks";
+import { useCart, useCartActions } from "@/lib/hooks";
+import { useCartStore } from "@/store/cart";
 import { useUIStore } from "@/store/ui";
 
-/** Storefront product card: variant chips + quick add, bilingual names. */
+/** Select several products without leaving the grid; quantities share the actual basket. */
 export function ProductCard({ product }: { product: ProductCardData }) {
   const lang = useUIStore((s) => s.lang);
-  const setCartOpen = useUIStore((s) => s.setCartOpen);
+  const pincode = useUIStore((s) => s.pincode);
+  const { cart, signedIn } = useCart(pincode);
+  const localLines = useCartStore((s) => s.lines);
+  const lines = signedIn ? (cart?.items ?? []) : localLines;
   const actions = useCartActions();
   const [variantId, setVariantId] = useState(product.variants[0]?.id ?? "");
-  const [added, setAdded] = useState(false);
-
   const variant = product.variants.find((v) => v.id === variantId) ?? product.variants[0];
-  const soldOut = variant != null && product.availableQuantity != null && product.availableQuantity <= 0;
-
-  function add() {
+  const quantity = lines.find((line) => line.variantId === variant?.id)?.quantity ?? 0;
+  const otherStock = product.variants.reduce((sum, v) => {
+    if (v.id === variant?.id) return sum;
+    const count = lines.find((line) => line.variantId === v.id)?.quantity ?? 0;
+    return sum + count * (product.sellingType === "loose" ? v.baseQuantity : 1);
+  }, 0);
+  const max =
+    variant && product.availableQuantity != null
+      ? Math.max(
+          0,
+          Math.min(
+            99,
+            Math.floor(
+              (product.availableQuantity - otherStock) /
+                (product.sellingType === "loose" ? variant.baseQuantity : 1),
+            ),
+          ),
+        )
+      : 99;
+  const busy = actions.add.isPending || actions.setQuantity.isPending;
+  function change(next: number) {
     if (!variant) return;
-    actions.add.mutate(
-      { variantId: variant.id, quantity: 1 },
-      {
-        onSuccess: () => {
-          setAdded(true);
-          setTimeout(() => setAdded(false), 1200);
-          setCartOpen(true);
-        },
-        onError: (err) => toast.error(err.message),
-      },
-    );
+    const input = { variantId: variant.id, quantity: next };
+    const options = { onError: (err: Error) => toast.error(err.message) };
+    if (quantity === 0) actions.add.mutate(input, options);
+    else actions.setQuantity.mutate(input, options);
   }
-
   return (
-    <article className="group flex flex-col overflow-hidden rounded-card border border-line bg-white shadow-card transition-shadow hover:shadow-lift">
+    <article
+      aria-label={product.nameEn}
+      className="group flex min-w-0 flex-col overflow-hidden rounded-card border border-line bg-white shadow-card transition-shadow hover:shadow-lift"
+    >
       <Link
         href={`/products/${product.slug}`}
         className="relative block aspect-square overflow-hidden bg-primary-50"
@@ -52,69 +67,66 @@ export function ProductCard({ product }: { product: ProductCardData }) {
         ) : null}
         {product.isFreshToday ? (
           <Badge tone="green" className="absolute left-2 top-2 bg-white/95">
-            🌱 {lang === "en" ? "Fresh today" : "ഇന്നത്തെ പുത്തൻ"}
+            🌱 {lang === "en" ? "Fresh" : "പുത്തൻ"}
           </Badge>
         ) : null}
-        {soldOut ? (
+        {max === 0 && quantity === 0 ? (
           <span className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-bold text-danger">
             {lang === "en" ? "Out of stock" : "ലഭ്യമല്ല"}
           </span>
         ) : null}
       </Link>
-
-      <div className="flex flex-1 flex-col gap-2 p-3">
-        <div className="flex-1">
-          <Link href={`/products/${product.slug}`} className="block">
-            <h3 className="truncate text-sm font-bold text-ink">
-              {lang === "en" ? product.nameEn : product.nameMl}
-            </h3>
-          </Link>
-          <p className="mt-0.5 text-xs text-muted">
-            {product.ratingCount > 0
-              ? `★ ${product.ratingAvg.toFixed(1)} (${product.ratingCount})`
-              : lang === "en"
-                ? "New at our shop"
-                : "പുതിയത്"}
-          </p>
-        </div>
-
+      <div className="flex flex-1 flex-col gap-2 p-2.5 sm:p-3">
+        <Link href={`/products/${product.slug}`}>
+          <h3 className="min-h-10 break-words text-sm font-bold leading-5 text-ink">
+            {lang === "en" ? product.nameEn : product.nameMl}
+          </h3>
+        </Link>
         {product.variants.length > 1 ? (
-          <div className="flex flex-wrap gap-1" role="group" aria-label="Choose pack size">
-            {product.variants.slice(0, 4).map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => setVariantId(v.id)}
-                aria-pressed={v.id === variantId}
-                className={
-                  v.id === variantId
-                    ? "rounded-full bg-primary px-2.5 py-1 text-[11px] font-bold text-white"
-                    : "rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold text-muted hover:border-primary-300"
-                }
-              >
+          <select
+            aria-label={`Pack size for ${product.nameEn}`}
+            value={variant?.id}
+            onChange={(e) => setVariantId(e.target.value)}
+            className="h-11 w-full min-w-0 rounded-lg border border-line bg-surface-muted px-2 text-base font-semibold sm:text-sm"
+          >
+            {product.variants.map((v) => (
+              <option key={v.id} value={v.id}>
                 {lang === "en" ? v.labelEn : v.labelMl}
-              </button>
+              </option>
             ))}
-          </div>
-        ) : null}
-
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-col">
-            <Money paise={variant?.pricePaise ?? 0} className="text-base font-extrabold text-primary-700" />
-            {variant?.mrpPaise && variant.mrpPaise > variant.pricePaise ? (
-              <Money paise={variant.mrpPaise} strike className="text-[11px]" />
-            ) : null}
-          </div>
+          </select>
+        ) : (
+          <p className="flex h-11 items-center text-sm text-muted">
+            {lang === "en" ? variant?.labelEn : variant?.labelMl}
+          </p>
+        )}
+        <div className="mt-auto flex flex-wrap items-baseline gap-1.5">
+          <Money paise={variant?.pricePaise ?? 0} className="text-base font-extrabold text-primary-700" />
+          {variant?.mrpPaise && variant.mrpPaise > variant.pricePaise ? (
+            <Money paise={variant.mrpPaise} strike className="text-xs" />
+          ) : null}
+        </div>
+        {quantity > 0 ? (
+          <QuantityStepper
+            value={quantity}
+            min={0}
+            max={max}
+            disabled={busy}
+            onChange={change}
+            ariaLabel={`Quantity for ${product.nameEn} ${variant?.labelEn}`}
+            className="w-full justify-between"
+          />
+        ) : (
           <button
             type="button"
-            onClick={add}
-            disabled={soldOut || actions.add.isPending}
+            onClick={() => change(1)}
+            disabled={!variant || max === 0 || busy}
             aria-label={`Add ${product.nameEn} ${variant?.labelEn ?? ""} to cart`}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-600 disabled:opacity-40"
+            className="flex h-11 w-full items-center justify-center gap-1 rounded-xl border border-primary bg-primary-surface text-sm font-bold text-primary-700 disabled:opacity-40"
           >
-            {added ? <Check className="h-4 w-4" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
+            <Plus className="h-4 w-4" aria-hidden /> {lang === "en" ? "Add" : "ചേർക്കുക"}
           </button>
-        </div>
+        )}
       </div>
     </article>
   );

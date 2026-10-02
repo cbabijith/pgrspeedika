@@ -63,19 +63,19 @@ export function HomeContent({
   const t = (en: string, ml: string) => (lang === "en" ? en : ml);
 
   return (
-    <div className="container-page space-y-10 py-6">
+    <div className="container-page space-y-6 py-4 md:space-y-10 md:py-6">
       <BannerCarousel banners={banners} lang={lang} />
 
       <section aria-labelledby="categories" className="space-y-4">
         <h2 id="categories" className="section-title">
           {t("Shop by category", "വിഭാഗം അനുസരിച്ച്")}
         </h2>
-        <div className="grid grid-cols-4 gap-3 md:grid-cols-8">
+        <div className="flex gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-8 md:overflow-visible">
           {categories.map((category) => (
             <Link
               key={category.id}
               href={`/category/${category.slug}`}
-              className="group flex flex-col items-center gap-2 rounded-card border border-line bg-white p-3 text-center shadow-card transition-shadow hover:shadow-lift"
+              className="group flex w-24 shrink-0 flex-col items-center md:w-auto gap-2 rounded-card border border-line bg-white p-3 text-center shadow-card transition-shadow hover:shadow-lift"
             >
               <span className="overflow-hidden rounded-xl">
                 {category.imageUrl ? (
@@ -99,10 +99,10 @@ export function HomeContent({
         title={t("Fresh today", "ഇന്നത്തെ പുത്തൻ")}
         subtitle={t("Cut and stocked this morning", "ഇന്ന് രാവിലെ എത്തിയവ")}
         products={freshToday}
-        href="/search?q=fresh"
+        href="/shop?fresh=1"
       />
 
-      <section aria-label="Why shop with us" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <section aria-label="Why shop with us" className="hidden gap-3 sm:grid sm:grid-cols-3">
         {[
           {
             icon: <Leaf className="h-6 w-6" aria-hidden />,
@@ -111,8 +111,11 @@ export function HomeContent({
           },
           {
             icon: <Clock className="h-6 w-6" aria-hidden />,
-            title: t("On-time slots", "സമയക്രമീകൃത ഡെലിവറി"),
-            body: t("Morning 7–9 AM and evening 5–7 PM slots.", "രാവിലെ 7–9, വൈകുന്നേരം 5–7 സ്ലോട്ടുകൾ."),
+            title: t("Easy WhatsApp orders", "സമയക്രമീകൃത ഡെലിവറി"),
+            body: t(
+              "Agree delivery charges and timing with the shop.",
+              "രാവിലെ 7–9, വൈകുന്നേരം 5–7 സ്ലോട്ടുകൾ.",
+            ),
           },
           {
             icon: <ShieldCheck className="h-6 w-6" aria-hidden />,
@@ -149,7 +152,10 @@ export function HomeContent({
 
       <section className="flex items-center justify-center gap-2 rounded-card bg-primary-surface p-5 text-center text-sm font-semibold text-primary-800">
         <Truck className="h-5 w-5" aria-hidden />
-        {t("Free delivery on orders above ₹499 in Kannur town", "കണ്ണൂർ ടൗണിൽ ₹499-ന് മുകളിൽ സൗജന്യ ഡെലിവറി")}
+        {t(
+          "Serving Kottayam district · Delivery confirmed on WhatsApp",
+          "കോട്ടയം ജില്ലയിൽ ഡെലിവറി · നിങ്ങളുടെ പിൻകോഡ് പരിശോധിക്കുക",
+        )}
       </section>
     </div>
   );

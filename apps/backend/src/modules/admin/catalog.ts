@@ -14,6 +14,8 @@ import {
   categories,
   inventory,
   inventoryMovements,
+  orderItems,
+  orders,
   productImages,
   productVariants,
   products,
@@ -26,35 +28,66 @@ import { writeAudit } from "../../lib/audit";
 /** Create or replace the full variant + image set for a product. */
 type Tx = Parameters<Parameters<AppContext["db"]["transaction"]>[0]>[0];
 
-async function replaceProductChildren(
+export async function replaceProductChildren(
   db: AppContext["db"] | Tx,
   productId: string,
   input: {
-    variants: Array<Omit<typeof productVariants.$inferInsert, "productId" | "sku"> & { sku: string | null }>;
-    images: Array<{ url: string; alt: string | null }>;
+    variants?: Array<Omit<typeof productVariants.$inferInsert, "productId" | "sku"> & { sku: string | null }>;
+    images?: Array<{ url: string; alt: string | null }>;
   },
 ) {
-  await db.delete(productVariants).where(eq(productVariants.productId, productId));
-  await db.delete(productImages).where(eq(productImages.productId, productId));
-  if (input.variants.length > 0) {
-    await db.insert(productVariants).values(
-      input.variants.map((v, i) => ({
-        ...v,
+  if (input.variants) {
+    const current = await db.select().from(productVariants).where(eq(productVariants.productId, productId));
+    const kept = new Set<string>();
+    for (const [i, v] of input.variants.entries()) {
+      const existing = v.id
+        ? current.find((row) => row.id === v.id)
+        : current.find(
+            (row) =>
+              !kept.has(row.id) &&
+              (v.sku
+                ? row.sku === v.sku
+                : row.unitType === v.unitType && row.baseQuantity === v.baseQuantity),
+          );
+      if (v.id && !existing) throw badRequest("Variant does not belong to this product");
+      if (existing && kept.has(existing.id)) throw badRequest("Duplicate variant");
+      const { id: _id, ...fields } = v;
+      const values = {
+        ...fields,
         productId,
-        sku: v.sku && v.sku.length > 1 ? v.sku : `${productId.slice(0, 8)}-${i}-${randomUUID().slice(0, 6)}`,
+        sku: v.sku || existing?.sku || `${productId.slice(0, 8)}-${i}-${randomUUID().slice(0, 6)}`,
         sortOrder: v.sortOrder ?? i,
-      })),
-    );
+      };
+      if (existing) {
+        // Changing pack size would silently change the quantity in saved carts.
+        if (existing.unitType !== v.unitType || existing.baseQuantity !== v.baseQuantity)
+          throw conflict("Create a new variant to change its pack size");
+        await db
+          .update(productVariants)
+          .set({ ...values, updatedAt: new Date() })
+          .where(eq(productVariants.id, existing.id));
+        kept.add(existing.id);
+      } else {
+        const [added] = await db.insert(productVariants).values(values).returning();
+        if (added) kept.add(added.id);
+      }
+    }
+    for (const old of current) {
+      if (!kept.has(old.id))
+        await db
+          .update(productVariants)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(eq(productVariants.id, old.id));
+    }
   }
-  if (input.images.length > 0) {
-    await db.insert(productImages).values(
-      input.images.map((img, i) => ({
-        productId,
-        url: img.url,
-        alt: img.alt ?? null,
-        sortOrder: i,
-      })),
-    );
+  if (input.images) {
+    await db.delete(productImages).where(eq(productImages.productId, productId));
+    if (input.images.length)
+      await db
+        .insert(productImages)
+        .values(
+          input.images.map((img, i) => ({ productId, url: img.url, alt: img.alt ?? null, sortOrder: i })),
+        );
   }
 }
 
@@ -114,6 +147,12 @@ export function adminCatalogRoutes(ctx: AppContext) {
           const id = c.req.param("id");
           const input = c.req.valid("json");
           const user = c.get("user");
+          const [before] = await ctx.db.select().from(categories).where(eq(categories.id, id));
+          if (!before) throw notFound("Category not found");
+          if (input.slug && input.slug !== before.slug) {
+            const [duplicate] = await ctx.db.select().from(categories).where(eq(categories.slug, input.slug));
+            if (duplicate) throw conflict("A category with this slug already exists");
+          }
           const [row] = await ctx.db
             .update(categories)
             .set({ ...input, updatedAt: new Date() })
@@ -125,7 +164,7 @@ export function adminCatalogRoutes(ctx: AppContext) {
             action: "category.updated",
             entityType: "category",
             entityId: id,
-            before: { nameEn: row.nameEn },
+            before: { nameEn: before.nameEn },
             after: input as Record<string, unknown>,
           });
           return c.json(ok(row));
@@ -160,6 +199,9 @@ export function adminCatalogRoutes(ctx: AppContext) {
         const rows = await ctx.db
           .select({
             product: products,
+            imageUrl: sql<
+              string | null
+            >`(select url from product_images where product_id = ${products.id} order by sort_order limit 1)`,
             categorySlug: categories.slug,
             categoryName: categories.nameEn,
             stock: inventory.stockQuantity,
@@ -189,6 +231,7 @@ export function adminCatalogRoutes(ctx: AppContext) {
               reservedQuantity: r.reserved ?? 0,
               lowStockThreshold: r.lowStockThreshold ?? 0,
               trackStock: r.trackStock,
+              imageUrl: r.imageUrl,
               variants: variants.filter((v) => v.productId === r.product.id),
             })),
           ),
@@ -307,8 +350,10 @@ export function adminCatalogRoutes(ctx: AppContext) {
           const input = c.req.valid("json");
           const user = c.get("user");
           const updated = await ctx.db.transaction(async (tx) => {
-            const [before] = await tx.select().from(products).where(eq(products.id, id));
+            const [before] = await tx.select().from(products).where(eq(products.id, id)).for("update");
             if (!before) throw notFound("Product not found");
+            if (input.sellingType && input.sellingType !== before.sellingType)
+              throw conflict("Create a new product to change its stock unit");
             const [row] = await tx
               .update(products)
               .set({
@@ -321,7 +366,8 @@ export function adminCatalogRoutes(ctx: AppContext) {
               .returning();
             if (input.variants || input.images) {
               await replaceProductChildren(tx, id, {
-                variants: (input.variants ?? []).map((v) => ({
+                variants: input.variants?.map((v) => ({
+                  id: v.id,
                   unitType: v.unitType,
                   baseQuantity: v.baseQuantity,
                   labelEn: v.labelEn,
@@ -333,7 +379,7 @@ export function adminCatalogRoutes(ctx: AppContext) {
                   isActive: v.isActive,
                   sku: v.sku ?? null,
                 })),
-                images: (input.images ?? []).map((i) => ({ url: i.url, alt: i.alt ?? null })),
+                images: input.images?.map((i) => ({ url: i.url, alt: i.alt ?? null })),
               });
             }
             if (input.lowStockThreshold != null) {
@@ -358,17 +404,42 @@ export function adminCatalogRoutes(ctx: AppContext) {
       .delete("/products/:id", requireStaff(ctx, "catalog:manage"), async (c) => {
         const id = c.req.param("id");
         const user = c.get("user");
-        const deleted = await ctx.db
-          .delete(products)
-          .where(eq(products.id, id))
-          .returning({ id: products.id, slug: products.slug });
-        if (deleted.length === 0) throw notFound("Product not found");
-        await writeAudit(ctx.db, {
-          actor: user,
-          action: "product.deleted",
-          entityType: "product",
-          entityId: id,
-          after: deleted[0] as Record<string, unknown>,
+        await ctx.db.transaction(async (tx) => {
+          // Check only after locking stock: an in-flight reservation must commit first.
+          const [product] = await tx.select().from(products).where(eq(products.id, id)).for("update");
+          if (!product) throw notFound("Product not found");
+          await tx.select().from(inventory).where(eq(inventory.productId, id)).for("update");
+          const activeOrders = await tx
+            .select({ id: orders.id })
+            .from(orders)
+            .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+            .where(
+              and(
+                eq(orderItems.productId, id),
+                inArray(orders.status, [
+                  "awaiting_confirmation",
+                  "pending_payment",
+                  "confirmed",
+                  "packed",
+                  "out_for_delivery",
+                ]),
+              ),
+            )
+            .limit(1);
+          if (activeOrders.length)
+            throw conflict("This product has open orders. Hide it instead of deleting it.");
+          const deleted = await tx
+            .delete(products)
+            .where(eq(products.id, id))
+            .returning({ id: products.id, slug: products.slug });
+          if (deleted.length === 0) throw notFound("Product not found");
+          await writeAudit(tx, {
+            actor: user,
+            action: "product.deleted",
+            entityType: "product",
+            entityId: id,
+            after: deleted[0] as Record<string, unknown>,
+          });
         });
         return c.json(ok({ deleted: id }));
       })
@@ -441,21 +512,25 @@ export function adminCatalogRoutes(ctx: AppContext) {
               .select({
                 id: productVariants.id,
                 pricePaise: productVariants.pricePaise,
+                mrpPaise: productVariants.mrpPaise,
                 sku: productVariants.sku,
               })
               .from(productVariants)
-              .where(inArray(productVariants.id, variantIds));
+              .where(inArray(productVariants.id, variantIds))
+              .orderBy(asc(productVariants.id))
+              .for("update");
             const currentMap = new Map(current.map((v) => [v.id, v]));
             for (const update of input.updates) {
               const existing = currentMap.get(update.variantId);
               if (!existing) throw badRequest("Unknown variant in price updates");
-              if (existing.pricePaise === update.pricePaise) continue;
+              const mrpPaise = update.mrpPaise === undefined ? existing.mrpPaise : update.mrpPaise;
+              if (existing.pricePaise === update.pricePaise && existing.mrpPaise === mrpPaise) continue;
               changed.push({ variantId: update.variantId, from: existing.pricePaise, to: update.pricePaise });
               await tx
                 .update(productVariants)
                 .set({
                   pricePaise: update.pricePaise,
-                  mrpPaise: update.mrpPaise ?? null,
+                  mrpPaise,
                   updatedAt: new Date(),
                 })
                 .where(eq(productVariants.id, update.variantId));
@@ -738,7 +813,16 @@ export function adminCatalogRoutes(ctx: AppContext) {
           const input = c.req.valid("json");
           const user = c.get("user");
           await ctx.db.transaction(async (tx) => {
-            const [inv] = await tx.select().from(inventory).where(eq(inventory.productId, input.productId));
+            await tx
+              .select({ id: products.id })
+              .from(products)
+              .where(eq(products.id, input.productId))
+              .for("key share");
+            const [inv] = await tx
+              .select()
+              .from(inventory)
+              .where(eq(inventory.productId, input.productId))
+              .for("update");
             if (!inv) throw notFound("Product inventory not found");
             const newStock = inv.stockQuantity + input.quantityDelta;
             if (newStock < inv.reservedQuantity) {

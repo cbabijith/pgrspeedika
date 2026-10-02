@@ -31,7 +31,7 @@ async function tryConnect(): Promise<boolean> {
 }
 
 function ctx(): WhatsAppOrderContext {
-  return { db: db!, shopWhatsApp: async () => SHOP_WA };
+  return { db: db!, guestTokenSecret: process.env.BETTER_AUTH_SECRET!, shopWhatsApp: async () => SHOP_WA };
 }
 
 d("whatsapp order lane (integration)", () => {
@@ -140,8 +140,8 @@ d("whatsapp order lane (integration)", () => {
       { productId: rice!.id, stockQuantity: 20_000, lowStockThreshold: 2_000 },
     ]);
     await db.insert(schema.deliveryZones).values({
-      pincode: "670001",
-      areaNameEn: "Kannur Town",
+      pincode: "686001",
+      areaNameEn: "Kottayam Town",
       areaNameMl: "കണ്ണൂർ",
       minOrderPaise: 9900,
       deliveryFeePaise: 2900,
@@ -210,10 +210,10 @@ thakkali 500 g
 1 matta rice 5 kg
 Name: Ravi
 Address: Mullakam house, Market road
-Pincode: 670001`,
+Pincode: 686001`,
     );
     expect(parsed).not.toBeNull();
-    expect(parsed!.pincode).toBe("670001");
+    expect(parsed!.pincode).toBe("686001");
     expect(parsed!.name).toBe("Ravi");
     expect(parsed!.address).toBe("Mullakam house, Market road");
     // tomato (2kg → four 500g packs) + thakkali (500g → one 500g pack) merge to 5 × 500 g
@@ -228,12 +228,21 @@ Pincode: 670001`,
   it("returns null without a pincode or with no matching items", async () => {
     const noPin = await parseWhatsAppOrderText(db!, "2 kg tomato\nName: A");
     expect(noPin).toBeNull();
-    const noItems = await parseWhatsAppOrderText(db!, "pizza 2\nPincode: 670001");
+    const noItems = await parseWhatsAppOrderText(db!, "pizza 2\nPincode: 686001");
     expect(noItems).toBeNull();
   });
 
-  it("places a guest WhatsApp order: real order + saved details + wa.me link", async () => {
-    const before = await db!.select().from(schema.user);
+  it("rejects partial orders and unsupported weights instead of silently changing them", async () => {
+    expect(await parseWhatsAppOrderText(db!, "2 kg tomato\npizza 2\nPincode: 686001")).toBeNull();
+    expect(await parseWhatsAppOrderText(db!, "tomato 600 g\nPincode: 686001")).toBeNull();
+    expect(await parseWhatsAppOrderText(db!, "0 kg tomato\nPincode: 686001")).toBeNull();
+    const packed = await parseWhatsAppOrderText(db!, "2 matta rice 5 kg\nPincode: 686001");
+    expect(packed?.items).toEqual([{ variantId: riceVariantId, quantity: 2, matchedName: "Matta Rice" }]);
+    const unit = await parseWhatsAppOrderText(db!, "1 matta rice\nPincode: 686001");
+    expect(unit?.items[0]?.quantity).toBe(1);
+  });
+
+  it("places a guest WhatsApp order: real order + private access + wa.me link", async () => {
     const result = await placeWhatsAppOrder(ctx(), {
       items: [
         { variantId: tomatoVariantId, quantity: 4 },
@@ -244,8 +253,8 @@ Pincode: 670001`,
         phone: "+919812345678",
         line1: "WA House, Test Lane",
         landmark: "Near temple",
-        pincode: "670001",
-        city: "Kannur",
+        pincode: "686001",
+        city: "Kottayam",
       },
       note: "ring the bell",
     });
@@ -253,7 +262,8 @@ Pincode: 670001`,
     // 4 × ₹30 + ₹325 = ₹445 → free-delivery threshold not met → +₹29 = ₹474
     expect(result.subtotalPaise).toBe(44_500);
     expect(result.grandTotalPaise).toBe(47_400);
-    expect(result.isNewCustomer).toBe(before.length === 0 || true);
+    expect(result.savedAddress).toBe(false);
+    expect(result.guestToken).toMatch(/^[a-f0-9]{64}$/);
     expect(result.shopWhatsApp).toBe(SHOP_WA);
     expect(result.whatsappLink).toContain(`wa.me/${SHOP_WA.replace(/\D/g, "")}?text=`);
     expect(decodeURIComponent(result.whatsappLink)).toContain(result.orderNumber);
@@ -262,23 +272,17 @@ Pincode: 670001`,
     expect(order?.source).toBe("whatsapp");
     expect(order?.status).toBe("confirmed");
     expect(order?.paymentMethod).toBe("cod");
-    expect(order?.slotDate).toBe(istTodayDateString());
+    expect([istTodayDateString(), istTodayDateString(new Date(Date.now() + 86400000))]).toContain(
+      order?.slotDate,
+    );
 
-    // Customer auto-created by phone with the address saved for next time.
-    const [customer] = await db!
+    // An unverified phone cannot claim an existing account or expose addresses.
+    expect(order?.userId).toBeNull();
+    const guestAccounts = await db!
       .select()
       .from(schema.user)
       .where(eq(schema.user.phoneNumber, "+919812345678"));
-    expect(customer).toBeDefined();
-    expect(customer!.name).toBe("Guest Customer");
-    const savedAddresses = await db!
-      .select()
-      .from(schema.addresses)
-      .where(eq(schema.addresses.userId, customer!.id));
-    expect(savedAddresses).toHaveLength(1);
-    expect(savedAddresses[0]?.isDefault).toBe(true);
-    expect(savedAddresses[0]?.pincode).toBe("670001");
-
+    expect(guestAccounts).toHaveLength(0);
     // Stock reserved.
     const [tomatoProduct] = await db!
       .select()
@@ -302,12 +306,12 @@ Pincode: 670001`,
         phone: "+919812345678",
         line1: "Another line",
         landmark: null,
-        pincode: "670001",
-        city: "Kannur",
+        pincode: "686001",
+        city: "Kottayam",
       },
     });
     const usersAfter = await db!.select().from(schema.user);
-    expect(usersAfter.filter((u) => u.phoneNumber === "+919812345678")).toHaveLength(1);
+    expect(usersAfter.filter((u) => u.phoneNumber === "+919812345678")).toHaveLength(0);
   });
 
   it("rejects unserved pincodes and below-minimum baskets", async () => {
@@ -323,7 +327,7 @@ Pincode: 670001`,
           city: "Delhi",
         },
       }),
-    ).rejects.toThrowError(/do not deliver/i);
+    ).rejects.toThrowError(/Kottayam district/i);
     await expect(
       placeWhatsAppOrder(ctx(), {
         items: [{ variantId: tomatoVariantId, quantity: 1 }],
@@ -332,8 +336,8 @@ Pincode: 670001`,
           phone: "+919899999998",
           line1: "Small house",
           landmark: null,
-          pincode: "670001",
-          city: "Kannur",
+          pincode: "686001",
+          city: "Kottayam",
         },
       }),
     ).rejects.toThrowError(/minimum/i);
@@ -356,9 +360,9 @@ Pincode: 670001`,
         line1: "House 1",
         line2: null,
         landmark: "Temple",
-        pincode: "670001",
-        areaName: "Kannur Town",
-        city: "Kannur",
+        pincode: "686001",
+        areaName: "Kottayam Town",
+        city: "Kottayam",
       },
       slotLabel: "Evening 5 PM – 7 PM",
       slotDate: "2026-10-02",

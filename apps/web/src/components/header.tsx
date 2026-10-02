@@ -1,26 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { MapPin, Search, ShoppingCart, User, Languages } from "lucide-react";
-import { Badge, Button, Logo } from "@pgrs/ui";
-import { useSession } from "@/lib/hooks";
+import { MapPin, Search, ShoppingCart, Languages } from "lucide-react";
+import { Badge, Logo } from "@pgrs/ui";
 import { useUIStore } from "@/store/ui";
-import { useCart } from "@/lib/hooks";
 import { SearchBox } from "./search-box";
+import { useCartStore } from "@/store/cart";
 
 export function Header() {
-  const router = useRouter();
-  const session = useSession();
-  const { data: sessionData } = session;
-  const user = sessionData?.user ?? null;
   const lang = useUIStore((s) => s.lang);
   const setLang = useUIStore((s) => s.setLang);
   const pincode = useUIStore((s) => s.pincode);
   const areaName = useUIStore((s) => s.areaName);
   const setCartOpen = useUIStore((s) => s.setCartOpen);
-  const { cart } = useCart(pincode);
+  const lines = useCartStore((s) => s.lines);
+  const count = lines.reduce((sum, line) => sum + line.quantity, 0);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -35,11 +30,11 @@ export function Header() {
           <SearchBox />
         </div>
 
-        <nav aria-label="Account" className="ml-auto flex items-center gap-1.5 md:gap-2">
+        <nav aria-label="Shop controls" className="ml-auto flex items-center gap-1.5 md:gap-2">
           <button
             type="button"
             onClick={() => setLang(lang === "en" ? "ml" : "en")}
-            className="inline-flex h-9 items-center gap-1 rounded-full px-3 text-sm font-semibold text-ink hover:bg-surface-muted"
+            className="inline-flex h-11 items-center gap-1 rounded-full px-2 text-sm font-semibold text-ink hover:bg-surface-muted"
             aria-label={lang === "en" ? "മലയാളത്തിലേക്ക് മാറുക" : "Switch to English"}
           >
             <Languages className="h-4 w-4" aria-hidden />
@@ -56,32 +51,17 @@ export function Header() {
             </Link>
           ) : null}
 
-          {user ? (
-            <Link
-              href="/account"
-              className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-ink hover:bg-surface-muted"
-            >
-              <User className="h-4 w-4" aria-hidden />
-              <span className="hidden sm:inline">{(user.name || "Account").split(" ")[0]}</span>
-            </Link>
-          ) : (
-            <Button variant="outline" size="sm" onClick={() => router.push("/login")}>
-              <User className="h-4 w-4" aria-hidden />
-              {lang === "en" ? "Login" : "ലോഗിൻ"}
-            </Button>
-          )}
-
           <button
             type="button"
             onClick={() => setCartOpen(true)}
-            className="relative inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-bold text-white hover:bg-primary-600"
-            aria-label={`Cart${mounted && cart ? `, ${cart.itemCount} items` : ""}`}
+            className="relative inline-flex h-11 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-bold text-white hover:bg-primary-600"
+            aria-label={`Cart${mounted ? `, ${count} items` : ""}`}
           >
             <ShoppingCart className="h-4 w-4" aria-hidden />
             <span className="hidden sm:inline">{lang === "en" ? "Cart" : "കൊട്ട"}</span>
-            {mounted && cart && cart.itemCount > 0 ? (
+            {mounted && count > 0 ? (
               <Badge tone="amber" className="absolute -right-1 -top-1 min-w-5 justify-center px-1">
-                {cart.itemCount}
+                {count}
               </Badge>
             ) : null}
           </button>

@@ -13,6 +13,7 @@ export function PincodeCheck() {
   const pincode = useUIStore((s) => s.pincode);
   const setPincode = useUIStore((s) => s.setPincode);
   const lang = useUIStore((s) => s.lang);
+  const [expanded, setExpanded] = useState(false);
   const [value, setValue] = useState("");
   const [state, setState] = useState<{ served: boolean; area?: string } | null>(null);
   const [checking, setChecking] = useState(false);
@@ -57,7 +58,23 @@ export function PincodeCheck() {
 
   return (
     <div className="border-b border-primary-200 bg-primary-50">
-      <div className="container-page flex flex-col items-start gap-3 py-4 md:flex-row md:items-center">
+      <div className="container-page flex min-h-12 items-center justify-between gap-2 md:hidden">
+        <span className="flex items-center gap-1.5 text-xs font-bold text-primary-800">
+          <MapPin className="h-4 w-4" aria-hidden />
+          Kottayam delivery
+        </span>
+        <button
+          type="button"
+          className="min-h-11 px-2 text-xs font-bold text-primary-700"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {t("Check pincode", "പിൻകോഡ് പരിശോധിക്കുക")}
+        </button>
+      </div>
+      <div
+        className={`container-page ${expanded ? "flex" : "hidden"} flex-col items-start gap-3 py-3 md:flex md:flex-row md:items-center`}
+      >
         <div className="flex flex-1 items-start gap-2">
           <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-primary-700" aria-hidden />
           <div>
@@ -65,8 +82,11 @@ export function PincodeCheck() {
               {t("Where should we deliver?", "എവിടെ ഡെലിവർ ചെയ്യണം?")}
             </p>
             <p className="text-xs text-primary-700">
-              {t("Check if we serve your pincode", "ഞങ്ങളുടെ സേവനം ലഭ്യമാണോ എന്ന് പരിശോധിക്കുക")}
-              {zones.data
+              {t(
+                "Kottayam district only · Check your pincode",
+                "കോട്ടയം ജില്ലയിൽ മാത്രം · പിൻകോഡ് പരിശോധിക്കുക",
+              )}
+              {zones.data?.length
                 ? ` · ${zones.data
                     .map((z) => z.pincode)
                     .slice(0, 4)
@@ -79,7 +99,7 @@ export function PincodeCheck() {
           <Input
             value={value}
             onChange={(e) => setValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="670001"
+            placeholder="686001"
             inputMode="numeric"
             aria-label="Delivery pincode"
           />
@@ -99,8 +119,8 @@ export function PincodeCheck() {
           <div className="w-full">
             <Alert tone="warning">
               {t(
-                "We don't deliver to this pincode yet — we're growing fast, check back soon!",
-                "ഈ പിൻകോഡിലേക്ക് ഇതുവരെ ഡെലിവറിയില്ല — വളരെ പെട്ടെന്ന് എത്തും!",
+                "Delivery is currently limited to enabled pincodes in Kottayam district.",
+                "നിലവിൽ കോട്ടയം ജില്ലയിലെ തിരഞ്ഞെടുത്ത പിൻകോഡുകളിൽ മാത്രമാണ് ഡെലിവറി.",
               )}
             </Alert>
           </div>

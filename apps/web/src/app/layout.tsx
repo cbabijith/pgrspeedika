@@ -4,20 +4,22 @@ import { Providers } from "@/components/providers";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { CartDrawer } from "@/components/cart-drawer";
-import { PincodeCheck } from "@/components/pincode-check";
+import { MobileShoppingNav } from "@/components/mobile-shopping-nav";
 import { ServiceWorker } from "@/components/service-worker";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: {
-    default: "PGRS Peedika · Fresh vegetables & groceries delivered in Kannur",
+    default: "PGRS Peedika · Fresh vegetables & groceries delivered in Kottayam district",
     template: "%s · PGRS Peedika",
   },
   description:
-    "Order farm-fresh vegetables, fruits, rice, spices and daily groceries from PGRS Peedika. Morning and evening delivery slots across Kannur and Kasaragod. Fresh today, every day.",
+    "Order farm-fresh vegetables, fruits, rice, spices and daily groceries from PGRS Peedika. Morning and evening delivery slots in Kottayam district. Fresh today, every day.",
   applicationName: "PGRS Peedika",
+  appleWebApp: { capable: true, title: "PGRS Peedika", statusBarStyle: "default" },
+  icons: { apple: "/apple-touch-icon.png" },
   manifest: "/manifest.webmanifest",
-  keywords: ["vegetables online", "grocery Kerala", "Kannur grocery delivery", "PGRS Peedika"],
+  keywords: ["vegetables online", "grocery Kerala", "Kottayam grocery delivery", "PGRS Peedika"],
   openGraph: {
     title: "PGRS Peedika",
     description: "Fresh vegetables and groceries delivered to your door.",
@@ -30,6 +32,7 @@ export const viewport: Viewport = {
   themeColor: "#1B7A3E",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -41,10 +44,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             Skip to content
           </a>
           <Header />
-          <PincodeCheck />
+          <div className="bg-primary-surface px-3 py-2 text-center text-xs font-semibold text-primary-700">
+            Kottayam district · Guest checkout · Delivery confirmed on WhatsApp
+          </div>
           <main id="main">{children}</main>
           <Footer />
           <CartDrawer />
+          <MobileShoppingNav />
           <ServiceWorker />
         </Providers>
       </body>

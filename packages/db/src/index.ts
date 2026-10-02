@@ -37,3 +37,5 @@ export { schema };
 export * from "./schema";
 export { applyMigrations } from "./migrate";
 export { seedCatalog } from "./seed";
+
+export { applyStorePresentation } from "./store-presentation";

@@ -1,3 +1,4 @@
+import { servedZoneCondition } from "./delivery-area";
 import { and, asc, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@pgrs/db";
 import {
@@ -104,7 +105,7 @@ async function fetchProductRows(
     .from(products)
     .innerJoin(categories, eq(products.categoryId, categories.id))
     .leftJoin(inventory, eq(inventory.productId, products.id))
-    .where(where)
+    .where(and(where, eq(categories.isActive, true)))
     .orderBy(...orderBy)
     .limit(limit)
     .offset(offset);
@@ -334,7 +335,7 @@ export async function homeFeed(db: Database) {
 }
 
 export async function activeZones(db: Database): Promise<ZoneDTO[]> {
-  const rows = await db.select().from(deliveryZones).where(eq(deliveryZones.isActive, true));
+  const rows = await db.select().from(deliveryZones).where(servedZoneCondition());
   return rows.map((z) => ({
     id: z.id,
     pincode: z.pincode,

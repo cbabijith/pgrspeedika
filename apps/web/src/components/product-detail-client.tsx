@@ -88,6 +88,9 @@ export function ProductDetailClient({
 
           <div className="flex items-start justify-between gap-3">
             <AddToCartPanel product={product} />
+            <p className="text-xs text-muted">
+              Product photos are representative; varieties and packaging may differ.
+            </p>
             <button
               type="button"
               onClick={() => toggleWishlist.mutate()}

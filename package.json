@@ -25,7 +25,8 @@
     "db:migrate": "pnpm --filter @pgrs/db migrate",
     "db:seed": "pnpm --filter @pgrs/backend seed",
     "db:studio": "pnpm --filter @pgrs/db studio",
-    "e2e": "pnpm --filter web exec playwright test",
+    "e2e:isolated": "pnpm --filter @pgrs/backend exec tsx scripts/test-store-e2e.ts",
+    "e2e": "pnpm --filter @pgrs/web exec playwright test",
     "prepare": "husky"
   },
   "devDependencies": {

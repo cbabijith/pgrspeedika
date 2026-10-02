@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { Button, EmptyState, Select, Skeleton } from "@pgrs/ui";
-import type { ListProductsQuery, Paginated, ProductCard as ProductCardData } from "@pgrs/contracts";
+import type { Category, ListProductsQuery, Paginated, ProductCard as ProductCardData } from "@pgrs/contracts";
 import { api, unwrap } from "@/lib/api";
 import { useUIStore } from "@/store/ui";
 import { ProductCard } from "./product-card";
@@ -27,31 +28,29 @@ export function CatalogBrowser({
 
   const [sort, setSort] = useState<ListProductsQuery["sort"]>("popular");
   const [inStock, setInStock] = useState(false);
-  const [freshOnly, setFreshOnly] = useState(false);
-  const [page, setPage] = useState(1);
-
-  const query = new URLSearchParams();
-  if (baseQuery.categorySlug) query.set("categorySlug", baseQuery.categorySlug);
-  if (baseQuery.q) query.set("q", baseQuery.q);
-  query.set("sort", sort);
-  if (inStock) query.set("inStock", "true");
-  if (freshOnly) query.set("freshToday", "true");
-  query.set("page", String(page));
-  query.set("pageSize", "20");
-
-  // Reset paging whenever the query shape changes.
-  useEffect(() => {
-    setPage(1);
-  }, [sort, inStock, freshOnly, baseQuery.categorySlug, baseQuery.q]);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["products", query.toString()],
-    queryFn: () =>
-      unwrap<Paginated<ProductCardData>>(api.api.catalog.products.$get({ query: query as never })),
+  const [freshOnly, setFreshOnly] = useState(searchParams.get("fresh") === "1");
+  const filters = {
+    ...baseQuery,
+    sort,
+    ...(inStock ? { inStock: true } : {}),
+    ...(freshOnly ? { freshToday: true } : {}),
+  };
+  const catalog = useInfiniteQuery({
+    queryKey: ["products", filters],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      unwrap<Paginated<ProductCardData>>(
+        api.api.catalog.products.$get({ query: { ...filters, page: pageParam, pageSize: 20 } }),
+      ),
+    getNextPageParam: (last) => (last.page < last.pageCount ? last.page + 1 : undefined),
   });
-
-  const items = data?.items ?? [];
-  const hasMore = data ? data.page < data.pageCount : false;
+  const categories = useQuery({
+    queryKey: ["categories"],
+    queryFn: () => unwrap<Category[]>(api.api.catalog.categories.$get()),
+  });
+  const items = catalog.data?.pages.flatMap((page) => page.items) ?? [];
+  const isLoading = catalog.isLoading;
+  const hasMore = catalog.hasNextPage;
 
   return (
     <div className="container-page space-y-5 py-6">
@@ -60,6 +59,20 @@ export function CatalogBrowser({
         {subtitle ? <p className="text-sm text-muted">{subtitle}</p> : null}
       </header>
 
+      <nav aria-label="Shop categories" className="flex gap-2 overflow-x-auto pb-2">
+        {[{ slug: "", nameEn: "All items", nameMl: "എല്ലാ ഇനങ്ങളും" }, ...(categories.data ?? [])].map(
+          (c) => (
+            <Link
+              key={c.slug}
+              href={c.slug ? `/category/${c.slug}` : "/shop"}
+              aria-current={c.slug === (baseQuery.categorySlug ?? "") ? "page" : undefined}
+              className={`flex min-h-11 shrink-0 items-center rounded-full border px-4 text-sm font-bold ${c.slug === (baseQuery.categorySlug ?? "") ? "border-primary bg-primary text-white" : "border-line bg-white text-ink"}`}
+            >
+              {lang === "en" ? c.nameEn : c.nameMl}
+            </Link>
+          ),
+        )}
+      </nav>
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-muted">
           <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
@@ -71,8 +84,8 @@ export function CatalogBrowser({
           onClick={() => setInStock((v) => !v)}
           className={
             inStock
-              ? "rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-white"
-              : "rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-muted hover:border-primary-300"
+              ? "min-h-11 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-white"
+              : "min-h-11 rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-muted hover:border-primary-300"
           }
         >
           {t("In stock", "ലഭ്യമുള്ളത്")}
@@ -83,8 +96,8 @@ export function CatalogBrowser({
           onClick={() => setFreshOnly((v) => !v)}
           className={
             freshOnly
-              ? "rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-white"
-              : "rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-muted hover:border-primary-300"
+              ? "min-h-11 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-white"
+              : "min-h-11 rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-muted hover:border-primary-300"
           }
         >
           🌱 {t("Fresh today", "ഇന്നത്തെ പുത്തൻ")}
@@ -108,6 +121,14 @@ export function CatalogBrowser({
         </div>
       </div>
 
+      {catalog.error ? (
+        <div role="alert" className="rounded-xl border border-line bg-white p-4 text-sm">
+          <p>{catalog.error.message}</p>
+          <Button variant="outline" onClick={() => catalog.refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
       {isLoading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 10 }).map((_, i) => (
@@ -136,14 +157,17 @@ export function CatalogBrowser({
           </div>
           {hasMore ? (
             <div className="flex justify-center">
-              <Button variant="outline" onClick={() => setPage((p) => p + 1)}>
+              <Button
+                variant="outline"
+                loading={catalog.isFetchingNextPage}
+                onClick={() => catalog.fetchNextPage()}
+              >
                 {t("Load more", "കൂടുതൽ കാണുക")}
               </Button>
             </div>
           ) : null}
         </>
       )}
-      <p className="sr-only">{searchParams.toString()}</p>
     </div>
   );
 }

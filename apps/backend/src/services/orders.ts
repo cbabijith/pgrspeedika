@@ -1,3 +1,4 @@
+import { servedZoneCondition } from "./delivery-area";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { Database } from "@pgrs/db";
@@ -5,6 +6,7 @@ import {
   addresses,
   cartItems,
   carts,
+  categories,
   couponRedemptions,
   coupons,
   deliverySlots,
@@ -35,6 +37,7 @@ import { createProviderOrder, createProviderRefund, mockPaymentSignature } from 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  awaiting_confirmation: ["confirmed", "cancelled"],
   pending_payment: ["confirmed", "cancelled"],
   confirmed: ["packed", "cancelled"],
   packed: ["out_for_delivery"],
@@ -88,22 +91,27 @@ function orderNumberPrefix(): string {
   return `PGRS-${istTodayDateString().replaceAll("-", "").slice(2)}-`;
 }
 
-async function nextOrderNumber(tx: Tx): Promise<string> {
+export async function nextOrderNumber(tx: Tx): Promise<string> {
   const prefix = orderNumberPrefix();
-  const [row] = await tx
-    .select({ count: sql<number>`count(*)::int` })
+  // Shared by web and WhatsApp orders; held until the insert commits.
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${prefix}))`);
+  const rows = await tx
+    .select({ orderNumber: orders.orderNumber })
     .from(orders)
     .where(sql`${orders.orderNumber} like ${`${prefix}%`}`);
-  return `${prefix}${String((row?.count ?? 0) + 1).padStart(4, "0")}`;
+  const max = rows.reduce((n, r) => Math.max(n, Number(r.orderNumber.slice(prefix.length)) || 0), 0);
+  return `${prefix}${String(max + 1).padStart(4, "0")}`;
 }
 
 export async function placeOrder(ctx: AppContext, input: PlaceOrderInput): Promise<PlaceOrderResult> {
   if (!isValidDateString(input.slotDate)) throw badRequest("Invalid slot date");
 
   return ctx.db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${input.idempotencyKey}))`);
     // Idempotency: replay the original order for a repeated request.
     const [existing] = await tx.select().from(orders).where(eq(orders.idempotencyKey, input.idempotencyKey));
     if (existing) {
+      if (existing.userId !== input.userId) throw conflict("This checkout key belongs to another customer");
       const result: PlaceOrderResult = {
         orderId: existing.id,
         orderNumber: existing.orderNumber,
@@ -139,10 +147,7 @@ export async function placeOrder(ctx: AppContext, input: PlaceOrderInput): Promi
         .from(addresses)
         .where(and(eq(addresses.id, input.addressId), eq(addresses.userId, input.userId)));
       if (!saved) throw notFound("Address not found");
-      const [z] = await tx
-        .select()
-        .from(deliveryZones)
-        .where(and(eq(deliveryZones.pincode, saved.pincode), eq(deliveryZones.isActive, true)));
+      const [z] = await tx.select().from(deliveryZones).where(servedZoneCondition(saved.pincode));
       if (!z) throw zoneNotServed();
       zone = z;
       snapshot = {
@@ -156,10 +161,7 @@ export async function placeOrder(ctx: AppContext, input: PlaceOrderInput): Promi
         city: saved.city,
       };
     } else if (input.address) {
-      const [z] = await tx
-        .select()
-        .from(deliveryZones)
-        .where(and(eq(deliveryZones.pincode, input.address.pincode), eq(deliveryZones.isActive, true)));
+      const [z] = await tx.select().from(deliveryZones).where(servedZoneCondition(input.address.pincode));
       if (!z) throw zoneNotServed();
       zone = z;
       let phone: string;
@@ -201,6 +203,7 @@ export async function placeOrder(ctx: AppContext, input: PlaceOrderInput): Promi
     const rows = await tx
       .select({
         quantity: cartItems.quantity,
+        categoryActive: categories.isActive,
         product: products,
         variant: productVariants,
         imageUrl: sql<
@@ -210,8 +213,10 @@ export async function placeOrder(ctx: AppContext, input: PlaceOrderInput): Promi
       .from(cartItems)
       .innerJoin(productVariants, eq(cartItems.variantId, productVariants.id))
       .innerJoin(products, eq(cartItems.productId, products.id))
+      .innerJoin(categories, eq(products.categoryId, categories.id))
       .where(eq(cartItems.cartId, cart.id));
-    const items = rows.filter((r) => r.product.isActive && r.variant.isActive);
+    const items = rows.filter((r) => r.product.isActive && r.variant.isActive && r.categoryActive);
+    if (items.length !== rows.length) throw badRequest("Some cart items are no longer available");
     if (items.length === 0) throw badRequest("Your cart items are no longer available");
 
     const lines = items.map((r) => ({
@@ -223,7 +228,10 @@ export async function placeOrder(ctx: AppContext, input: PlaceOrderInput): Promi
         unitType: r.variant.unitType,
         gstRate: r.product.gstRate,
       }),
-      orderedQtyGrams: r.variant.unitType === "weight" ? r.variant.baseQuantity * r.quantity : r.quantity,
+      orderedQtyGrams:
+        r.product.sellingType === "loose" && r.variant.unitType === "weight"
+          ? r.variant.baseQuantity * r.quantity
+          : r.quantity,
     }));
     const subtotalPaise = lines.reduce((s, l) => s + l.priced.lineSubtotalPaise, 0);
 
@@ -260,7 +268,7 @@ export async function placeOrder(ctx: AppContext, input: PlaceOrderInput): Promi
         unitPricePaise: l.row.variant.pricePaise,
         quantity: l.row.quantity,
         baseQuantity: l.row.variant.baseQuantity,
-        unitType: l.row.variant.unitType,
+        unitType: l.row.product.sellingType === "packaged" ? "unit" : l.row.variant.unitType,
         gstRate: l.row.product.gstRate,
       })),
       coupon && {
@@ -327,7 +335,7 @@ export async function placeOrder(ctx: AppContext, input: PlaceOrderInput): Promi
         nameMl: l.row.product.nameMl,
         unitLabelEn: l.row.variant.labelEn,
         unitLabelMl: l.row.variant.labelMl,
-        unitType: l.row.variant.unitType,
+        unitType: l.row.product.sellingType === "packaged" ? "unit" : l.row.variant.unitType,
         hsnCode: l.row.product.hsnCode,
         gstRate: l.row.product.gstRate,
         unitPricePaise: l.row.variant.pricePaise,
@@ -403,7 +411,7 @@ export async function placeOrder(ctx: AppContext, input: PlaceOrderInput): Promi
         nameEn: l.row.product.nameEn,
         quantity: l.row.quantity,
         orderedQtyGrams: l.orderedQtyGrams,
-        unitType: l.row.variant.unitType,
+        unitType: l.row.product.sellingType === "packaged" ? "unit" : l.row.variant.unitType,
       })),
     });
     if (input.paymentMethod === "cod") {
@@ -523,10 +531,11 @@ export async function capturePayment(
     const [payment] = await tx
       .select()
       .from(payments)
-      .where(eq(payments.providerOrderId, input.providerOrderId));
+      .where(eq(payments.providerOrderId, input.providerOrderId))
+      .for("update");
     if (!payment) throw notFound("Payment not found for provider order");
 
-    const [order] = await tx.select().from(orders).where(eq(orders.id, payment.orderId));
+    const [order] = await tx.select().from(orders).where(eq(orders.id, payment.orderId)).for("update");
     if (!order) throw notFound("Order not found");
 
     if (payment.status === "captured") {
@@ -611,7 +620,7 @@ export interface PackOrderInput {
 /** Packing with weight adjustment: recompute the bill and commit the sale. */
 export async function packOrder(ctx: AppContext, input: PackOrderInput): Promise<OrderDTO> {
   const result = await ctx.db.transaction(async (tx) => {
-    const [order] = await tx.select().from(orders).where(eq(orders.id, input.orderId));
+    const [order] = await tx.select().from(orders).where(eq(orders.id, input.orderId)).for("update");
     if (!order) throw notFound("Order not found");
     if (order.status !== "confirmed") {
       throw conflict(`Order is ${order.status}; only confirmed orders can be packed`);
@@ -785,22 +794,27 @@ export async function cancelOrder(
   input: { orderId: string; reason: string; actor: SessionUser | null; customerInitiated: boolean },
 ): Promise<OrderDTO> {
   const result = await ctx.db.transaction(async (tx) => {
-    const [order] = await tx.select().from(orders).where(eq(orders.id, input.orderId));
+    const [order] = await tx.select().from(orders).where(eq(orders.id, input.orderId)).for("update");
     if (!order) throw notFound("Order not found");
-    if (order.status !== "confirmed" && order.status !== "pending_payment") {
+    if (
+      order.status !== "confirmed" &&
+      order.status !== "pending_payment" &&
+      order.status !== "awaiting_confirmation"
+    ) {
       throw conflict("Orders can only be cancelled before packing");
     }
 
     const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, order.id));
-    await releaseStock(
-      tx,
-      items.map((i) => ({
-        productId: i.productId ?? "",
-        nameEn: i.nameEn,
-        amount: i.orderedQtyGrams,
-      })),
-      order.id,
-    );
+    if (order.status !== "awaiting_confirmation")
+      await releaseStock(
+        tx,
+        items.map((i) => ({
+          productId: i.productId ?? "",
+          nameEn: i.nameEn,
+          amount: i.orderedQtyGrams,
+        })),
+        order.id,
+      );
     if (order.slotId) {
       await releaseSlot(tx, order.slotId, order.slotDate);
     }
@@ -920,12 +934,79 @@ export async function settleRefund(ctx: AppContext, refundId: string): Promise<v
 }
 
 /** Generic status transition used by the admin board and delivery flow. */
+export async function confirmWhatsAppRequest(
+  ctx: AppContext,
+  input: {
+    orderId: string;
+    deliveryFeePaise: number;
+    deliveryDate: string;
+    deliveryNote: string;
+    actor: SessionUser | null;
+  },
+): Promise<OrderDTO> {
+  if (!isValidDateString(input.deliveryDate) || input.deliveryDate < istTodayDateString()) {
+    throw badRequest("Choose today or a future delivery date");
+  }
+  await ctx.db.transaction(async (tx) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, input.orderId)).for("update");
+    if (!order) throw notFound("Order not found");
+    if (order.status !== "awaiting_confirmation" || order.paymentMethod !== "cod") {
+      throw conflict("This order is not awaiting shop confirmation");
+    }
+    const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+    if (items.some((item) => !item.productId)) throw badRequest("A requested product is no longer available");
+    await reserveStock(
+      tx,
+      items.map((item) => ({
+        productId: item.productId!,
+        nameEn: item.nameEn,
+        amount: item.orderedQtyGrams,
+      })),
+      order.id,
+    );
+    const total = order.subtotalPaise + input.deliveryFeePaise;
+    await tx
+      .update(orders)
+      .set({
+        status: "confirmed",
+        deliveryFeePaise: input.deliveryFeePaise,
+        grandTotalPaise: total,
+        slotDate: input.deliveryDate,
+        slotLabelEn: input.deliveryNote,
+        slotLabelMl: input.deliveryNote,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, order.id));
+    await tx.insert(orderStatusHistory).values({
+      orderId: order.id,
+      fromStatus: order.status,
+      toStatus: "confirmed",
+      note: `Delivery agreed: ${input.deliveryDate}, ${input.deliveryNote}; charge ${input.deliveryFeePaise / 100} INR`,
+      changedBy: input.actor?.id ?? null,
+    });
+    await new OutboxPublisher(tx).publish(EVENTS.orderConfirmed, {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      userId: null,
+      grandTotalPaise: total,
+      customerPhone: order.address.contactPhone,
+      customerName: order.address.contactName,
+      note: `Delivery confirmed: ${input.deliveryDate} · ${input.deliveryNote}. Total INR ${total / 100}, cash on delivery.`,
+    });
+  });
+  return getOrderDTO(ctx.db, input.orderId);
+}
+
 export async function transitionOrder(
   ctx: AppContext,
   input: { orderId: string; to: OrderStatus; note?: string | null; actor: SessionUser | null },
 ): Promise<OrderDTO> {
+  if (input.to === "packed") throw badRequest("Use the packing screen to record weights and update stock");
+  if (input.to === "cancelled")
+    throw badRequest("Use the cancellation action to release stock and delivery capacity");
+  if (input.to === "confirmed") throw badRequest("Confirmation requires a verified payment");
   await ctx.db.transaction(async (tx) => {
-    const [order] = await tx.select().from(orders).where(eq(orders.id, input.orderId));
+    const [order] = await tx.select().from(orders).where(eq(orders.id, input.orderId)).for("update");
     if (!order) throw notFound("Order not found");
     const allowed = ALLOWED_TRANSITIONS[order.status] ?? [];
     if (!allowed.includes(input.to)) {

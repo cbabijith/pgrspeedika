@@ -6,10 +6,9 @@ import { newHono } from "../lib/hono";
 import { badRequest, ok, unauthorized } from "../lib/errors";
 import { rateLimit, RATE_LIMITS } from "../lib/rate-limit";
 import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
-import { whatsappOrderSchema } from "@pgrs/contracts";
-import { lookupCustomerByPhone, placeWhatsAppOrder, nextBookableSlot } from "../services/whatsapp-orders";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { guestOrderSchema } from "@pgrs/contracts";
+import { placeWhatsAppOrder, nextBookableSlot } from "../services/whatsapp-orders";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { parseWhatsAppOrderText } from "../services/whatsapp-parser";
 
 async function shopWhatsApp(ctx: AppContext): Promise<string> {
@@ -34,30 +33,24 @@ export function whatsappRoutes(ctx: AppContext) {
         );
       })
 
-      /** Saved name/addresses for a phone — prefills repeat WhatsApp orders. */
-      .get(
-        "/api/whatsapp/customer",
-        zValidator("query", z.object({ phone: z.string() }), (result, c) => {
-          if (!result.success)
-            return c.json({ ok: false as const, code: "VALIDATION_ERROR", message: "phone required" }, 400);
-        }),
-        async (c) => {
-          const raw = c.req.valid("query").phone;
-          let phone: string;
-          try {
-            phone = normalizePhone(raw);
-          } catch {
-            throw badRequest("Invalid phone number");
-          }
-          const found = await lookupCustomerByPhone(ctx.db, phone);
-          return c.json(ok(found));
-        },
-      )
-
       /** Guest order from the web cart → real order + pre-filled WhatsApp message. */
+      .post("/api/whatsapp/request", zValidator("json", guestOrderSchema), async (c) => {
+        const input = c.req.valid("json");
+        rateLimit(`wa-request:${c.get("ip")}:${input.customer.phone}`, RATE_LIMITS.checkout);
+        const result = await placeWhatsAppOrder(
+          {
+            db: ctx.db,
+            guestTokenSecret: ctx.env.BETTER_AUTH_SECRET,
+            shopWhatsApp: () => shopWhatsApp(ctx),
+            requestConfirmation: true,
+          },
+          input,
+        );
+        return c.json(ok(result), 201);
+      })
       .post(
         "/api/whatsapp/order",
-        zValidator("json", whatsappOrderSchema, (result, c) => {
+        zValidator("json", guestOrderSchema, (result, c) => {
           if (!result.success)
             return c.json(
               {
@@ -73,28 +66,17 @@ export function whatsappRoutes(ctx: AppContext) {
           const input = c.req.valid("json");
           rateLimit(`wa-order:${c.get("ip")}:${input.customer.phone}`, RATE_LIMITS.checkout);
           const result = await placeWhatsAppOrder(
-            { db: ctx.db, shopWhatsApp: () => shopWhatsApp(ctx) },
+            {
+              db: ctx.db,
+              guestTokenSecret: ctx.env.BETTER_AUTH_SECRET,
+              shopWhatsApp: () => shopWhatsApp(ctx),
+            },
             {
               ...input,
               customer: { ...input.customer, phone: normalizePhone(input.customer.phone) },
             },
           );
 
-          // Tell the shop immediately through the configured provider
-          // (console in dev, webhook in production) and record the send.
-          try {
-            await ctx.notifier.send({
-              channel: "whatsapp",
-              to: result.shopWhatsApp,
-              title: `New WhatsApp order ${result.orderNumber}`,
-              body: `Open the order in the admin panel. Total ₹${(result.grandTotalPaise / 100).toFixed(2)} (COD).`,
-              eventName: "order.placed",
-              relatedType: "order",
-              relatedId: result.orderId,
-            });
-          } catch {
-            // Provider failures must never fail the customer's order.
-          }
           return c.json(ok(result), 201);
         },
       )
@@ -116,7 +98,9 @@ export function whatsappRoutes(ctx: AppContext) {
       })
       .post("/api/whatsapp/webhook", async (c) => {
         const raw = await c.req.raw.text();
-        const secret = process.env.WHATSAPP_APP_SECRET;
+        const secret = ctx.env.WHATSAPP_APP_SECRET;
+        if (!secret && ctx.env.NODE_ENV === "production")
+          throw unauthorized("WhatsApp webhook is not configured");
         if (secret) {
           const signature = c.req.header("x-hub-signature-256") ?? "";
           const expected = `sha256=${createHmac("sha256", secret).update(raw).digest("hex")}`;
@@ -141,6 +125,7 @@ export function whatsappRoutes(ctx: AppContext) {
 
 /** Extract text messages from a Meta Cloud API webhook payload. */
 interface InboundText {
+  id: string;
   from: string;
   text: string;
   name: string | null;
@@ -152,20 +137,27 @@ function extractTextMessages(payload: unknown): InboundText[] {
       changes?: Array<{
         value?: {
           contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
-          messages?: Array<{ from?: string; text?: { body?: string }; type?: string }>;
+          messages?: Array<{ id?: string; from?: string; text?: { body?: string }; type?: string }>;
         };
       }>;
     }>;
   };
   const out: InboundText[] = [];
+  if (!root || typeof root !== "object" || !Array.isArray(root.entry)) return out;
   for (const entry of root.entry ?? []) {
-    for (const change of entry.changes ?? []) {
-      const value = change.value;
-      if (!value?.messages) continue;
-      const contactName = value.contacts?.[0]?.profile?.name ?? null;
+    if (!entry || !Array.isArray(entry.changes)) continue;
+    for (const change of entry.changes) {
+      const value = change?.value;
+      if (!Array.isArray(value?.messages)) continue;
+      const contactName = Array.isArray(value.contacts) ? (value.contacts[0]?.profile?.name ?? null) : null;
       for (const message of value.messages) {
-        if (message.type === "text" && message.from && message.text?.body) {
-          out.push({ from: message.from, text: message.text.body, name: contactName });
+        if (
+          message?.type === "text" &&
+          typeof message.id === "string" &&
+          typeof message.from === "string" &&
+          typeof message.text?.body === "string"
+        ) {
+          out.push({ id: message.id, from: message.from, text: message.text.body, name: contactName });
         }
       }
     }
@@ -181,6 +173,8 @@ async function handleInboundMessages(
   let ordersCreated = 0;
   let replies = 0;
   for (const message of messages) {
+    // The website receipt is already a saved order; never parse it as a new one.
+    if (/New order PGRS-\d+-\d+/.test(message.text)) continue;
     let phone: string;
     try {
       phone = normalizePhone(message.from);
@@ -188,19 +182,20 @@ async function handleInboundMessages(
       continue;
     }
     const parsed = await parseWhatsAppOrderText(ctx.db, message.text);
-    if (!parsed) {
+    if (!parsed || (!parsed.name && !message.name) || !parsed.address) {
       await reply(
         ctx,
         phone,
-        "Send your order like this:\n2 kg tomato\n1 matta rice 5 kg\n\nName: Your name\nAddress: house, street\nPincode: 670001\n\nWe deliver in Kannur and Kasaragod 🥬",
+        "Send your order like this:\n2 kg tomato\n1 matta rice 5 kg\n\nName: Your name\nAddress: house, street\nPincode: 686001\n\nDelivery is available only in enabled pincodes within Kottayam district 🥬",
       );
       replies += 1;
       continue;
     }
     try {
       const order = await placeWhatsAppOrder(
-        { db: ctx.db, shopWhatsApp: () => shopWhatsApp(ctx) },
+        { db: ctx.db, guestTokenSecret: ctx.env.BETTER_AUTH_SECRET, shopWhatsApp: () => shopWhatsApp(ctx) },
         {
+          idempotencyKey: `wa-inbound-${createHash("sha256").update(message.id).digest("hex")}`,
           items: parsed.items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
           customer: {
             name: parsed.name ?? message.name ?? "WhatsApp customer",
@@ -208,12 +203,12 @@ async function handleInboundMessages(
             line1: parsed.address ?? "Address shared on WhatsApp",
             landmark: null,
             pincode: parsed.pincode,
-            city: "Kannur",
+            city: "Kottayam",
           },
-          note: message.text.length > 800 ? message.text.slice(0, 800) : message.text,
+          note: message.text.length > 500 ? message.text.slice(0, 500) : message.text,
         },
       );
-      ordersCreated += 1;
+      if (!order.replay) ordersCreated += 1;
       await reply(
         ctx,
         phone,

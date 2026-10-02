@@ -17,6 +17,7 @@ import { deliverySlots, deliveryZones } from "./delivery";
 import { coupons } from "./marketing";
 
 export const orderStatusEnum = pgEnum("order_status", [
+  "awaiting_confirmation",
   "pending_payment",
   "confirmed",
   "packed",

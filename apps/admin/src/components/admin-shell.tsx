@@ -22,7 +22,7 @@ import {
   Truck,
   Users,
 } from "lucide-react";
-import { Logo } from "@pgrs/ui";
+import { Logo, Sheet } from "@pgrs/ui";
 import { roleHas, type Permission } from "@pgrs/contracts";
 import { authClient } from "@/lib/auth";
 
@@ -154,11 +154,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   const visibleNav = role ? NAV.filter((item) => roleHas(role, item.permission)) : [];
 
+  const dailyNav = visibleNav.filter((item) =>
+    ["/orders", "/products", "/categories", "/inventory"].includes(item.href),
+  );
   return (
     <div className="flex min-h-dvh">
-      <aside
-        className={`${menuOpen ? "block" : "hidden"} fixed inset-y-0 left-0 z-40 w-64 overflow-y-auto bg-primary-700 text-primary-50 md:sticky md:top-0 md:block md:h-dvh`}
-      >
+      <aside className="hidden w-64 shrink-0 overflow-y-auto bg-primary-700 text-primary-50 md:sticky md:top-0 md:block md:h-dvh">
         <div className="p-4">
           <Link href="/dashboard" className="block rounded-xl bg-white/95 p-2.5">
             <Logo />
@@ -207,11 +208,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             type="button"
             aria-label="Toggle menu"
             onClick={() => setMenuOpen((v) => !v)}
-            className="rounded-lg border border-line p-2"
+            aria-expanded={menuOpen}
+            className="flex h-11 w-11 items-center justify-center rounded-lg border border-line"
           >
             <Menu className="h-4 w-4" aria-hidden />
           </button>
-          <Logo />
+          <span className="text-sm font-bold text-primary-700">Owner workspace</span>
         </div>
         {user ? (
           <div className="container-admin">{children}</div>
@@ -221,6 +223,58 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
       </div>
+      <Sheet open={menuOpen} onOpenChange={setMenuOpen} title="Owner menu" side="left" width="max-w-sm">
+        <nav aria-label="Owner menu" className="space-y-1 p-4">
+          {visibleNav.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setMenuOpen(false)}
+              aria-current={pathname.startsWith(item.href) ? "page" : undefined}
+              className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-bold ${pathname.startsWith(item.href) ? "bg-primary-surface text-primary-700" : "text-ink"}`}
+            >
+              {item.icon}
+              {item.label}
+            </Link>
+          ))}
+          <button
+            type="button"
+            onClick={signOut}
+            className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-sm font-bold text-danger"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        </nav>
+      </Sheet>
+      {user ? (
+        <nav
+          aria-label="Owner navigation"
+          className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-white px-1 pt-1 md:hidden"
+          style={{ paddingBottom: "max(4px, env(safe-area-inset-bottom))" }}
+        >
+          {dailyNav.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={pathname.startsWith(item.href) ? "page" : undefined}
+              className={`flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-bold ${pathname.startsWith(item.href) ? "bg-primary-50 text-primary-700" : "text-muted"}`}
+            >
+              {item.icon}
+              {item.href === "/inventory" ? "Stock" : item.label}
+            </Link>
+          ))}
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-expanded={menuOpen}
+            className="flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-bold text-muted"
+          >
+            <Menu className="h-4 w-4" />
+            More
+          </button>
+        </nav>
+      ) : null}
     </div>
   );
 }

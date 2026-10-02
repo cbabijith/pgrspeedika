@@ -19,7 +19,7 @@ import {
   Select,
   Textarea,
 } from "@pgrs/ui";
-import { api, unwrap } from "@/lib/api";
+import { API_URL, api, unwrap } from "@/lib/api";
 import { DataTable } from "@/components/data-table";
 
 interface AdminVariant {
@@ -36,6 +36,7 @@ interface AdminVariant {
 }
 
 interface AdminProduct {
+  imageUrl: string | null;
   id: string;
   slug: string;
   categoryId: string;
@@ -66,6 +67,7 @@ interface AdminCategory {
 }
 
 const emptyForm = {
+  imageUrl: "",
   slug: "",
   categoryId: "",
   nameEn: "",
@@ -77,8 +79,8 @@ const emptyForm = {
   sellingType: "loose" as "loose" | "packaged",
   isFreshToday: false,
   isActive: true,
-  lowStockThreshold: 5,
-  initialStock: 25,
+  lowStockThreshold: 5000,
+  initialStock: 25000,
   variantLabelEn: "250 g",
   variantLabelMl: "250 ഗ്രാം",
   variantUnitType: "weight" as "weight" | "unit",
@@ -136,6 +138,7 @@ export default function AdminProductsPage() {
     const v = p.variants[0];
     setEditing(p);
     setForm({
+      imageUrl: p.imageUrl ?? "",
       slug: p.slug,
       categoryId: p.categoryId,
       nameEn: p.nameEn,
@@ -158,17 +161,26 @@ export default function AdminProductsPage() {
     setDialogOpen(true);
   }
 
+  const [saving, setSaving] = useState(false);
+
   async function save() {
     const pricePaise = Math.round(Number(form.variantPrice) * 100);
-    if (!form.slug || !form.categoryId || !form.nameEn || !form.nameMl || Number.isNaN(pricePaise)) {
-      toast.error("Fill slug, category, both names and the variant price");
+    const slug =
+      form.slug ||
+      form.nameEn
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+    if (!slug || !form.categoryId || !form.nameEn.trim() || !Number.isFinite(pricePaise) || pricePaise < 0) {
+      toast.error("Fill the product name, category and a valid price");
       return;
     }
     const payload = {
-      slug: form.slug,
+      slug,
       categoryId: form.categoryId,
       nameEn: form.nameEn,
-      nameMl: form.nameMl,
+      nameMl: form.nameMl.trim() || form.nameEn.trim(),
       description: form.description || null,
       brand: form.brand || null,
       hsnCode: form.hsnCode,
@@ -178,12 +190,22 @@ export default function AdminProductsPage() {
       isActive: form.isActive,
       lowStockThreshold: form.lowStockThreshold,
       ...(editing ? {} : { initialStock: form.initialStock }),
+      ...(!editing || form.imageUrl !== (editing.imageUrl ?? "")
+        ? { images: form.imageUrl ? [{ url: form.imageUrl, alt: form.nameEn }] : [] }
+        : {}),
       variants: [
         {
+          ...(editing?.variants[0]
+            ? {
+                id: editing.variants[0].id,
+                sku: editing.variants[0].sku,
+                mrpPaise: editing.variants[0].mrpPaise,
+              }
+            : {}),
           unitType: form.variantUnitType,
           baseQuantity: form.variantBaseQuantity,
           labelEn: form.variantLabelEn,
-          labelMl: form.variantLabelMl,
+          labelMl: form.variantLabelMl.trim() || form.variantLabelEn.trim(),
           pricePaise,
           stepQuantity: form.variantUnitType === "weight" ? 250 : 1,
           isActive: true,
@@ -191,6 +213,7 @@ export default function AdminProductsPage() {
         ...(editing ? editing.variants.slice(1) : []),
       ],
     } as never;
+    setSaving(true);
     try {
       if (editing) {
         await unwrap(api.api.admin.products[":id"].$patch({ param: { id: editing.id }, json: payload }));
@@ -203,6 +226,8 @@ export default function AdminProductsPage() {
       invalidate();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -306,7 +331,8 @@ export default function AdminProductsPage() {
         <h1 className="text-xl font-extrabold tracking-tight text-ink">Products</h1>
         <div className="flex flex-wrap gap-2">
           <a
-            href={`${process.env.NEXT_PUBLIC_API_URL}/api/admin/catalog/export.csv`}
+            href={`${API_URL}/api/admin/catalog/export.csv`}
+            className="hidden md:block"
             target="_blank"
             rel="noreferrer"
           >
@@ -314,7 +340,7 @@ export default function AdminProductsPage() {
               <Download className="h-4 w-4" aria-hidden /> Export CSV
             </Button>
           </a>
-          <Link href="/products/import">
+          <Link href="/products/import" className="hidden md:block">
             <Button variant="outline">
               <Upload className="h-4 w-4" aria-hidden /> Import CSV
             </Button>
@@ -325,6 +351,23 @@ export default function AdminProductsPage() {
         </div>
       </header>
 
+      <div className="flex gap-2">
+        <Link
+          href="/quick-price"
+          className="flex min-h-11 items-center rounded-xl border border-line bg-white px-4 text-sm font-bold text-primary-700"
+        >
+          Prices
+        </Link>
+        <Link
+          href="/inventory"
+          className="flex min-h-11 items-center rounded-xl border border-line bg-white px-4 text-sm font-bold text-primary-700"
+        >
+          Manage stock
+        </Link>
+      </div>
+      <p className="text-sm text-muted">
+        Vegetables, groceries and daily essentials. Edit any product to rename it or change its pack price.
+      </p>
       <Input
         placeholder="Search products…"
         value={search}
@@ -333,7 +376,74 @@ export default function AdminProductsPage() {
         aria-label="Search products"
       />
 
-      <DataTable data={filtered} columns={columns} emptyMessage="No products match." />
+      <div className="hidden md:block">
+        <DataTable data={filtered} columns={columns} emptyMessage="No products match." />
+      </div>
+      <div className="space-y-3 md:hidden">
+        {products.isLoading ? (
+          <p>Loading products…</p>
+        ) : products.error ? (
+          <p role="alert">{products.error.message}</p>
+        ) : filtered.length === 0 ? (
+          <p>No products match.</p>
+        ) : (
+          filtered.map((p) => (
+            <Card key={p.id} className="space-y-3 p-4" aria-label={p.nameEn}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h2 className="break-words text-base font-bold">{p.nameEn}</h2>
+                  <p className="text-xs text-muted">
+                    {p.categoryName} · {p.sellingType === "loose" ? "By weight" : "Packaged grocery"}
+                  </p>
+                </div>
+                <Badge tone={p.isActive ? "green" : "neutral"}>{p.isActive ? "Active" : "Hidden"}</Badge>
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                {p.variants.map((v) => (
+                  <span key={v.id}>
+                    {v.labelEn}: <Money paise={v.pricePaise} className="font-bold" />
+                  </span>
+                ))}
+              </div>
+              <p className="text-sm font-semibold">
+                Available:{" "}
+                {p.sellingType === "loose"
+                  ? `${((p.stockQuantity - p.reservedQuantity) / 1000).toFixed(2)} kg`
+                  : `${p.stockQuantity - p.reservedQuantity} packs`}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => openEdit(p)}
+                  aria-label={`Edit ${p.nameEn}`}
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit product
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={`Duplicate ${p.nameEn}`}
+                  onClick={() => duplicate.mutate(p.id)}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={`Delete ${p.nameEn}`}
+                  onClick={() => {
+                    if (window.confirm(`Delete ${p.nameEn}?`)) remove.mutate(p.id);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 text-danger" />
+                </Button>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogTrigger asChild>
@@ -341,11 +451,11 @@ export default function AdminProductsPage() {
         </DialogTrigger>
         <DialogContent
           title={editing ? `Edit ${editing.nameEn}` : "New product"}
-          description="Bilingual names, GST/HSN and pack variants."
-          className="w-[min(96vw,760px)]"
+          description="Sell vegetables or packaged groceries. Names and prices can be changed anytime."
+          className="w-[min(96vw,760px)] p-4 sm:p-6"
         >
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Slug" hint="lowercase-with-dashes">
+            <Field label="Slug" hint="Generated from the English name if blank">
               <Input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} />
             </Field>
             <Field label="Category">
@@ -361,9 +471,18 @@ export default function AdminProductsPage() {
               </Select>
             </Field>
             <Field label="Name (English)">
-              <Input value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} />
+              <Input
+                value={form.nameEn}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    nameEn: e.target.value,
+                    nameMl: form.nameMl === form.nameEn ? e.target.value : form.nameMl,
+                  })
+                }
+              />
             </Field>
-            <Field label="Name (Malayalam)">
+            <Field label="Name (Malayalam)" hint="Optional; uses the English name if blank">
               <Input value={form.nameMl} onChange={(e) => setForm({ ...form, nameMl: e.target.value })} />
             </Field>
             <Field label="Brand (optional)">
@@ -386,14 +505,34 @@ export default function AdminProductsPage() {
             </Field>
             <Field label="Selling type">
               <Select
+                disabled={Boolean(editing)}
                 value={form.sellingType}
-                onChange={(e) => setForm({ ...form, sellingType: e.target.value as "loose" | "packaged" })}
+                onChange={(e) => {
+                  const packaged = e.target.value === "packaged";
+                  setForm({
+                    ...form,
+                    sellingType: packaged ? "packaged" : "loose",
+                    variantUnitType: packaged ? "unit" : "weight",
+                    variantBaseQuantity: packaged ? 1 : 250,
+                    variantLabelEn: packaged ? "1 pack" : "250 g",
+                    variantLabelMl: packaged ? "1 പാക്ക്" : "250 ഗ്രാം",
+                    initialStock: packaged ? 25 : 25000,
+                    lowStockThreshold: packaged ? 5 : 5000,
+                  });
+                }}
               >
                 <option value="loose">loose (by weight)</option>
                 <option value="packaged">packaged</option>
               </Select>
             </Field>
           </div>
+          <Field label="Product image URL (optional)">
+            <Input
+              placeholder="https://… or /media/…"
+              value={form.imageUrl}
+              onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+            />
+          </Field>
           <Field label="Description" className="mt-1">
             <Textarea
               value={form.description}
@@ -425,6 +564,7 @@ export default function AdminProductsPage() {
               </Field>
               <Field label="Unit type">
                 <Select
+                  disabled={Boolean(editing)}
                   value={form.variantUnitType}
                   onChange={(e) => setForm({ ...form, variantUnitType: e.target.value as "weight" | "unit" })}
                 >
@@ -435,16 +575,23 @@ export default function AdminProductsPage() {
               <Field label={form.variantUnitType === "weight" ? "Grams per pack" : "Units per pack"}>
                 <Input
                   inputMode="numeric"
+                  disabled={Boolean(editing)}
                   value={form.variantBaseQuantity}
                   onChange={(e) => setForm({ ...form, variantBaseQuantity: Number(e.target.value) || 0 })}
                 />
               </Field>
               {!editing ? (
-                <Field label="Initial stock (grams/units)">
+                <Field label={form.sellingType === "loose" ? "Initial stock (kg)" : "Initial stock (packs)"}>
                   <Input
-                    inputMode="numeric"
-                    value={form.initialStock}
-                    onChange={(e) => setForm({ ...form, initialStock: Number(e.target.value) || 0 })}
+                    inputMode="decimal"
+                    value={form.sellingType === "loose" ? form.initialStock / 1000 : form.initialStock}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        initialStock:
+                          Math.round(Number(e.target.value) * (form.sellingType === "loose" ? 1000 : 1)) || 0,
+                      })
+                    }
                   />
                 </Field>
               ) : null}
@@ -452,7 +599,7 @@ export default function AdminProductsPage() {
             <p className="text-xs text-muted">
               {editing && editing.variants.length > 1
                 ? `${editing.variants.length - 1} additional variant(s) are preserved unchanged.`
-                : "Add more variants after saving, or duplicate this product."}
+                : "Use Quick prices for daily price updates. Loose stock is entered in kilograms."}
             </p>
           </Card>
 
@@ -477,7 +624,9 @@ export default function AdminProductsPage() {
                 Active
               </label>
             </div>
-            <Button onClick={save}>{editing ? "Save changes" : "Create product"}</Button>
+            <Button onClick={save} loading={saving}>
+              {editing ? "Save changes" : "Create product"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

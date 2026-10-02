@@ -18,9 +18,13 @@ export const whatsappOrderSchema = z.object({
     line1: z.string().min(4, "House / street is required").max(200),
     landmark: z.string().max(120).nullish(),
     pincode: pincodeSchema,
-    city: z.string().min(2).max(60).default("Kannur"),
+    city: z.string().min(2).max(60).default("Kottayam"),
   }),
   slotId: z.string().uuid().optional(),
+  slotDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   note: z.string().max(500).nullish(),
   idempotencyKey: z.string().min(8).max(80).optional(),
 });
@@ -31,7 +35,10 @@ export const whatsappCustomerLookupSchema = z.object({
 });
 
 export type WhatsAppOrderResult = {
+  awaitingConfirmation?: boolean;
   orderId: string;
+  replay: boolean;
+  guestToken: string;
   orderNumber: string;
   grandTotalPaise: number;
   subtotalPaise: number;
@@ -51,3 +58,8 @@ export type WhatsAppOrderResult = {
     lineTotalPaise: number;
   }>;
 };
+
+/** Browser requests must retain this key across network retries. */
+export const guestOrderSchema = whatsappOrderSchema.extend({
+  idempotencyKey: z.string().min(8).max(80),
+});

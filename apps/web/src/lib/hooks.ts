@@ -5,28 +5,19 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import type { CartDTO } from "@pgrs/contracts";
 import { api, unwrap, ApiRequestError } from "./api";
 import { authClient } from "./auth";
+import { toast } from "sonner";
 import { useCartStore } from "@/store/cart";
 
 export function useSession() {
   return authClient.useSession();
 }
 
-/** Cart for the current visitor: server cart when signed in, priced preview for guests. */
+/** The public shop always uses a guest basket, independent of owner/admin sessions. */
 export function useCart(pincode?: string | null) {
-  const session = useSession();
-  const signedIn = Boolean(session.data?.user);
   const localLines = useCartStore((s) => s.lines);
-  const replaceAll = useCartStore((s) => s.replaceAll);
-
-  const serverCart = useQuery({
-    queryKey: ["cart", pincode ?? ""],
-    enabled: signedIn,
-    queryFn: () => unwrap<CartDTO>(api.api.cart.$get({ query: pincode ? { pincode } : undefined })),
-  });
-
   const guestCart = useQuery({
     queryKey: ["cart-preview", JSON.stringify(localLines), pincode ?? ""],
-    enabled: !signedIn && localLines.length > 0,
+    enabled: localLines.length > 0,
     queryFn: () =>
       unwrap<CartDTO>(
         api.api.cart.preview.$post({
@@ -35,42 +26,18 @@ export function useCart(pincode?: string | null) {
         }),
       ),
   });
-
-  // Merge the guest cart into the server cart exactly once after sign-in.
-  const mergedFor = useRef<string | null>(null);
-  useEffect(() => {
-    const userId = session.data?.user?.id;
-    if (!userId || mergedFor.current === userId || localLines.length === 0) return;
-    mergedFor.current = userId;
-    (async () => {
-      try {
-        await unwrap(api.api.cart.merge.$post({ json: { items: localLines } }));
-      } finally {
-        replaceAll([]);
-      }
-    })();
-  }, [session.data?.user?.id, localLines, replaceAll]);
-
-  if (signedIn) {
-    return {
-      signedIn,
-      cart: serverCart.data ?? null,
-      isLoading: serverCart.isLoading,
-      error: serverCart.error,
-    };
-  }
   return {
-    signedIn,
+    signedIn: false,
     cart: guestCart.data ?? null,
     isLoading: guestCart.isLoading && localLines.length > 0,
     error: guestCart.error,
+    refetch: guestCart.refetch,
   };
 }
 
 export function useCartActions() {
   const queryClient = useQueryClient();
-  const session = useSession();
-  const signedIn = Boolean(session.data?.user);
+  const signedIn = false;
   const addLocal = useCartStore((s) => s.add);
   const setLocal = useCartStore((s) => s.setQuantity);
   const removeLocal = useCartStore((s) => s.remove);
@@ -149,4 +116,33 @@ export function useCartActions() {
 
 export function isApiError(err: unknown, code?: string): err is ApiRequestError {
   return err instanceof ApiRequestError && (code == null || err.code === code);
+}
+
+/** Mounted once in Providers: multiple cart views must not merge the same basket. */
+export function useGuestCartSync() {
+  const session = useSession();
+  const localLines = useCartStore((s) => s.lines);
+  const replaceAll = useCartStore((s) => s.replaceAll);
+  const queryClient = useQueryClient();
+  // Merge the guest cart into the server cart exactly once after sign-in.
+  const mergedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const userId = session.data?.user?.id;
+    if (!userId || mergedFor.current === userId || localLines.length === 0) return;
+    mergedFor.current = userId;
+    (async () => {
+      try {
+        await unwrap(api.api.cart.merge.$post({ json: { items: localLines } }));
+        replaceAll([]);
+        queryClient.invalidateQueries({ queryKey: ["cart"] });
+      } catch (err) {
+        mergedFor.current = null;
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Could not sync your cart. Your items are saved on this device.",
+        );
+      }
+    })();
+  }, [session.data?.user?.id, localLines, replaceAll, queryClient]);
 }

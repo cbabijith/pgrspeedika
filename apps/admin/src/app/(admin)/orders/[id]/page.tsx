@@ -16,6 +16,16 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
   const [weights, setWeights] = useState<Record<string, string>>({});
   const [refundAmount, setRefundAmount] = useState("");
   const [assignee, setAssignee] = useState("");
+  const [deliveryFee, setDeliveryFee] = useState("0");
+  const [deliveryDate, setDeliveryDate] = useState(() =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date()),
+  );
+  const [deliveryNote, setDeliveryNote] = useState("");
 
   const order = useQuery({
     queryKey: ["admin-order", id],
@@ -46,6 +56,25 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
     },
     onSuccess: () => {
       toast.success("Order packed — bill adjusted to actual weights");
+      invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const confirm = useMutation({
+    mutationFn: async () => {
+      const fee = Number(deliveryFee);
+      if (!Number.isFinite(fee) || fee < 0 || fee > 1000 || deliveryNote.trim().length < 2)
+        throw new Error("Enter a valid delivery charge and agreed timing");
+      return unwrap(
+        api.api.admin.orders[":id"].confirm.$post({
+          param: { id },
+          json: { deliveryFeePaise: Math.round(fee * 100), deliveryDate, deliveryNote },
+        }),
+      );
+    },
+    onSuccess: () => {
+      toast.success("Order confirmed — stock reserved");
       invalidate();
     },
     onError: (err) => toast.error(err.message),
@@ -128,7 +157,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <Link href="/orders" aria-label="Back to orders">
             <Button size="icon" variant="outline">
               <ArrowLeft className="h-4 w-4" aria-hidden />
@@ -147,6 +176,49 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
+          {o.status === "awaiting_confirmation" ? (
+            <Card className="space-y-3 p-5">
+              <h2 className="font-bold">Confirm WhatsApp request</h2>
+              <p className="text-sm text-muted">
+                Agree the delivery charge and timing with the customer, then confirm. Stock is reserved only
+                when you confirm.
+              </p>
+              <a
+                href={`https://wa.me/${o.address.contactPhone.replace(/\D/g, "")}?text=${encodeURIComponent(`Regarding your order ${o.orderNumber} at PGRS Peedika`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="block font-semibold text-primary-700 underline"
+              >
+                Chat with customer on WhatsApp
+              </a>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Delivery charge (₹)">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="1000"
+                    step="0.01"
+                    value={deliveryFee}
+                    onChange={(e) => setDeliveryFee(e.target.value)}
+                  />
+                </Field>
+                <Field label="Delivery date">
+                  <Input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+                </Field>
+                <Field label="Agreed delivery timing" className="sm:col-span-2">
+                  <Input
+                    placeholder="e.g. Between 5 PM and 7 PM"
+                    maxLength={120}
+                    value={deliveryNote}
+                    onChange={(e) => setDeliveryNote(e.target.value)}
+                  />
+                </Field>
+              </div>
+              <Button className="w-full" onClick={() => confirm.mutate()} loading={confirm.isPending}>
+                Confirm order and reserve stock
+              </Button>
+            </Card>
+          ) : null}
           {/* Packing */}
           {o.status === "confirmed" ? (
             <Card className="p-5">
@@ -235,7 +307,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
             <h2 className="mb-3 text-base font-bold text-ink">History</h2>
             <ol className="space-y-2 text-sm">
               {o.history.map((h) => (
-                <li key={h.id} className="flex justify-between gap-3 border-b border-line pb-1.5">
+                <li key={h.id} className="flex flex-wrap justify-between gap-3 border-b border-line pb-1.5">
                   <span className="font-semibold text-ink">
                     {h.fromStatus ? `${h.fromStatus} → ` : ""}
                     {h.toStatus}
@@ -254,7 +326,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         {/* Side actions */}
-        <div className="space-y-4">
+        <div className="order-first space-y-4 lg:order-last">
           <Card className="space-y-2 p-5">
             <h2 className="text-base font-bold text-ink">Bill</h2>
             <dl className="space-y-1 text-sm">
@@ -275,7 +347,11 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
               <div className="flex justify-between">
                 <dt className="text-muted">Delivery</dt>
                 <dd>
-                  <Money paise={o.deliveryFeePaise} className="font-bold" />
+                  {o.status === "awaiting_confirmation" ? (
+                    "To be confirmed"
+                  ) : (
+                    <Money paise={o.deliveryFeePaise} className="font-bold" />
+                  )}
                 </dd>
               </div>
               <div className="flex justify-between border-t border-line pt-1.5">
@@ -306,7 +382,11 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
             </h2>
             <Field label="Assign rider / packer">
               <div className="flex gap-2">
-                <Select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="flex-1">
+                <Select
+                  value={assignee}
+                  onChange={(e) => setAssignee(e.target.value)}
+                  className="min-w-0 flex-1"
+                >
                   <option value="">— select staff —</option>
                   {(staff.data ?? []).map((s) => (
                     <option key={s.id} value={s.id}>

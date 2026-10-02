@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { productVariants, products } from "@pgrs/db";
+import { categories, productVariants, products } from "@pgrs/db";
 import type { Database } from "@pgrs/db";
 
 export interface ParsedWhatsAppOrder {
@@ -37,7 +37,10 @@ async function loadCatalog(db: Database): Promise<CatalogEntry[]> {
     })
     .from(products)
     .innerJoin(productVariants, eq(productVariants.productId, products.id))
-    .where(and(eq(products.isActive, true), eq(productVariants.isActive, true)))
+    .innerJoin(categories, eq(products.categoryId, categories.id))
+    .where(
+      and(eq(products.isActive, true), eq(productVariants.isActive, true), eq(categories.isActive, true)),
+    )
     .orderBy(sql`${productVariants.baseQuantity} asc`);
   return rows;
 }
@@ -84,7 +87,7 @@ function parseQuantityPhrase(phrase: string): { quantity: number; productText: s
     return {
       quantity: amount,
       productText: qtyFirst[3] ?? "",
-      grams: unit.startsWith("k") ? amount * 1000 : unit.startsWith("g") || unit === "" ? amount : undefined,
+      grams: unit.startsWith("k") ? amount * 1000 : unit.startsWith("g") ? amount : undefined,
     };
   }
   if (qtyLast) {
@@ -93,21 +96,22 @@ function parseQuantityPhrase(phrase: string): { quantity: number; productText: s
     return {
       quantity: amount,
       productText: qtyLast[1] ?? "",
-      grams: unit.startsWith("k") ? amount * 1000 : unit.startsWith("g") || unit === "" ? amount : undefined,
+      grams: unit.startsWith("k") ? amount * 1000 : unit.startsWith("g") ? amount : undefined,
     };
   }
   return { quantity: 1, productText: text };
 }
 
-/** Pick the variant closest to the requested grams (weight items). */
-function pickVariant(requestedGrams: number | undefined, matches: CatalogEntry[]): CatalogEntry {
+/** Pick a supported size without rounding the customer's requested weight. */
+function pickVariant(requestedGrams: number | undefined, matches: CatalogEntry[]): CatalogEntry | null {
   if (requestedGrams == null) {
     // Default to the smallest weight size or first entry.
     const weight = matches.find((m) => m.unitType === "weight");
     return weight ?? matches[0]!;
   }
   const weights = matches.filter((m) => m.unitType === "weight");
-  const pool = weights.length > 0 ? weights : matches;
+  const pool = weights.filter((v) => Number.isInteger(requestedGrams / v.baseQuantity));
+  if (!pool.length) return null;
   return pool.reduce((best, entry) =>
     Math.abs(entry.baseQuantity - requestedGrams) < Math.abs(best.baseQuantity - requestedGrams)
       ? entry
@@ -123,9 +127,9 @@ function pickVariant(requestedGrams: number | undefined, matches: CatalogEntry[]
  *   matta rice 5 kg
  *   Name: Ravi
  *   Address: Mullakam house, Market road
- *   Pincode: 670001
+ *   Pincode: 686001
  *
- * Returns null when no catalog item matches or the pincode is missing —
+ * Returns null when any item is unknown, its amount is unsupported or the pincode is missing —
  * callers reply with the how-to-order template instead.
  */
 export async function parseWhatsAppOrderText(
@@ -168,28 +172,34 @@ export async function parseWhatsAppOrderText(
     list.push(entry);
     byProduct.set(entry.productId, list);
   }
-  const flatCatalog = [...byProduct.values()].flat();
-  void flatCatalog;
-
   const items: ParsedWhatsAppOrder["items"] = [];
   for (const itemLine of itemLines) {
     // Strip an explicit size suffix like "5 kg" from the product text too.
     const { quantity, productText, grams } = parseQuantityPhrase(itemLine);
+    const sizeSuffix = productText.match(/(\d+(?:\.\d+)?)\s*(kg|kilo|g|gm|gram|grams)\b/i);
+    const sizeGrams = sizeSuffix
+      ? Number(sizeSuffix[1]) * (sizeSuffix[2]!.toLowerCase().startsWith("k") ? 1000 : 1)
+      : undefined;
     const cleanedProduct = productText
       .replace(/\d+(?:\.\d+)?\s*(kg|kilo|g|gm|gram|grams|packet|pack|piece|pcs|no)\b/gi, "")
       .trim();
     const match = matchOne(cleanedProduct || productText, catalog);
-    if (!match) continue;
+    if (!match || quantity <= 0) return null;
     const variants = byProduct.get(match.productId) ?? [match];
-    const variant = pickVariant(grams, variants);
+    const variant = pickVariant(sizeGrams ?? grams, variants);
+    if (!variant) return null;
     // Convert a requested weight ("2 kg") into packs of the chosen size.
     const packs =
-      variant.unitType === "weight" && grams != null && grams > 0
-        ? Math.max(1, Math.round(grams / variant.baseQuantity))
-        : Math.max(1, Math.round(quantity));
+      sizeGrams != null
+        ? (quantity * sizeGrams) / variant.baseQuantity
+        : variant.unitType === "weight" && grams != null
+          ? grams / variant.baseQuantity
+          : quantity;
+    if (!Number.isInteger(packs) || packs < 1 || packs > 99) return null;
     if (items.some((i) => i.variantId === variant.variantId)) {
       const existing = items.find((i) => i.variantId === variant.variantId)!;
       existing.quantity += packs;
+      if (existing.quantity > 99) return null;
     } else {
       items.push({ variantId: variant.variantId, quantity: packs, matchedName: match.nameEn });
     }

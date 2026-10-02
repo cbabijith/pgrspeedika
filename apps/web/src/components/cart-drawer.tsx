@@ -8,15 +8,15 @@ import { Button, EmptyState, Money, QuantityStepper, Sheet, Skeleton, Alert } fr
 import { formatINR } from "@pgrs/contracts";
 import { useCart, useCartActions } from "@/lib/hooks";
 import { useUIStore } from "@/store/ui";
+import { UnavailableCartNotice } from "./unavailable-cart-notice";
 
 /** Cart drawer opened from the header. Guests see the priced preview. */
 export function CartDrawer() {
   const router = useRouter();
   const open = useUIStore((s) => s.cartOpen);
   const setOpen = useUIStore((s) => s.setCartOpen);
-  const pincode = useUIStore((s) => s.pincode);
   const lang = useUIStore((s) => s.lang);
-  const { cart, isLoading, signedIn } = useCart(pincode);
+  const { cart, isLoading, signedIn, error, refetch } = useCart();
   const actions = useCartActions();
   const [coupon, setCoupon] = useState("");
   const [couponPending, setCouponPending] = useState(false);
@@ -49,8 +49,14 @@ export function CartDrawer() {
           <Skeleton className="h-20 w-full" />
           <Skeleton className="h-20 w-full" />
         </div>
+      ) : error ? (
+        <div className="space-y-3 p-5">
+          <Alert tone="warning">Your items are saved. Current prices could not load.</Alert>
+          <Button onClick={() => refetch()}>Retry loading basket</Button>
+        </div>
       ) : !cart || cart.items.length === 0 ? (
         <div className="p-5">
+          <UnavailableCartNotice cart={cart} signedIn={signedIn} />
           <EmptyState
             icon={<ShoppingCart className="h-10 w-10" />}
             title={t("Your cart is empty", "കൊട്ട ശൂന്യമാണ്")}
@@ -65,13 +71,20 @@ export function CartDrawer() {
         </div>
       ) : (
         <>
+          <div className="px-4 pt-3">
+            <UnavailableCartNotice cart={cart} signedIn={signedIn} />
+          </div>
           <ul className="divide-y divide-line">
             {cart.items.map((line) => (
               <li key={line.variantId} className="flex gap-3 p-4">
                 {line.imageUrl ? (
-                  <img src={line.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" />
+                  <img
+                    src={line.imageUrl}
+                    alt=""
+                    className="h-12 w-12 shrink-0 sm:h-16 sm:w-16 rounded-xl object-cover"
+                  />
                 ) : null}
-                <div className="flex flex-1 flex-col gap-1">
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-sm font-bold text-ink">
@@ -84,7 +97,7 @@ export function CartDrawer() {
                     </div>
                     <Money paise={line.lineTotalPaise} className="text-sm font-extrabold text-primary-700" />
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-1">
                     <QuantityStepper
                       value={line.quantity}
                       min={0}
@@ -197,10 +210,10 @@ export function CartDrawer() {
               className="w-full"
               onClick={() => {
                 setOpen(false);
-                router.push(signedIn ? "/checkout" : "/login?next=/checkout");
+                router.push("/checkout");
               }}
             >
-              {t("Checkout", "ചെക്കൗട്ട്")}
+              {t("Continue to WhatsApp checkout", "ചെക്കൗട്ട്")}
               {totals?.grandTotalPaise != null ? (
                 <>
                   {" · "}
@@ -208,16 +221,6 @@ export function CartDrawer() {
                 </>
               ) : null}
             </Button>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                router.push("/whatsapp");
-              }}
-              className="text-xs font-semibold text-primary-700 underline"
-            >
-              {t("No account? Order on WhatsApp instead →", "അക്കൗണ്ട് വേണ്ട? WhatsApp-ൽ ഓർഡർ ചെയ്യൂ →")}
-            </button>
           </div>
         </>
       )}

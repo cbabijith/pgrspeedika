@@ -3,7 +3,11 @@
 import { hc } from "hono/client";
 import type { AdminAppType } from "@pgrs/backend/app";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ??
+  (process.env.NODE_ENV === "development" && typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:4000`
+    : "http://localhost:4000");
 
 /** Typed Hono RPC client for the admin API — cookies travel with each call. */
 export const api = hc<AdminAppType>(API_URL, {

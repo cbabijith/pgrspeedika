@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { Badge, Button, Card, Field, Input, Tabs, TabsContent, TabsList, TabsTrigger } from "@pgrs/ui";
-import { formatMinutes, formatINR } from "@pgrs/contracts";
+import { formatMinutes, formatINR, isKottayamPincode, KOTTAYAM_PINCODES } from "@pgrs/contracts";
 import { api, unwrap } from "@/lib/api";
 
 interface Zone {
@@ -30,6 +30,15 @@ interface Slot {
   isActive: boolean;
 }
 
+const zoneDefaults = {
+  pincode: "",
+  areaNameEn: "",
+  areaNameMl: "",
+  minOrder: "99",
+  deliveryFee: "29",
+  freeAbove: "499",
+};
+
 export default function ZonesPage() {
   const queryClient = useQueryClient();
   const zones = useQuery({
@@ -44,14 +53,8 @@ export default function ZonesPage() {
       ),
   });
 
-  const [zoneForm, setZoneForm] = useState({
-    pincode: "",
-    areaNameEn: "",
-    areaNameMl: "",
-    minOrder: "99",
-    deliveryFee: "29",
-    freeAbove: "499",
-  });
+  const [zoneForm, setZoneForm] = useState(zoneDefaults);
+  const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
   const [slotForm, setSlotForm] = useState({
     nameEn: "Noon 12–2 PM",
     nameMl: "ഉച്ച 12–2",
@@ -79,23 +82,27 @@ export default function ZonesPage() {
 
   const createZone = useMutation({
     mutationFn: async () => {
-      await unwrap(
-        api.api.admin.zones.$post({
-          json: {
-            pincode: zoneForm.pincode,
-            areaNameEn: zoneForm.areaNameEn,
-            areaNameMl: zoneForm.areaNameMl,
-            minOrderPaise: Math.round(Number(zoneForm.minOrder) * 100),
-            deliveryFeePaise: Math.round(Number(zoneForm.deliveryFee) * 100),
-            freeDeliveryThresholdPaise: Math.round(Number(zoneForm.freeAbove) * 100),
-            isActive: true,
-          } as never,
-        }),
-      );
+      const json = {
+        pincode: zoneForm.pincode,
+        areaNameEn: zoneForm.areaNameEn,
+        areaNameMl: zoneForm.areaNameMl,
+        minOrderPaise: Math.round(Number(zoneForm.minOrder) * 100),
+        deliveryFeePaise: Math.round(Number(zoneForm.deliveryFee) * 100),
+        freeDeliveryThresholdPaise: zoneForm.freeAbove.trim()
+          ? Math.round(Number(zoneForm.freeAbove) * 100)
+          : null,
+      };
+      if (editingZoneId) {
+        await unwrap(api.api.admin.zones[":id"].$patch({ param: { id: editingZoneId }, json }));
+      } else {
+        await unwrap(api.api.admin.zones.$post({ json: { ...json, isActive: true } }));
+      }
     },
     onSuccess: () => {
-      toast.success("Zone added");
+      toast.success(editingZoneId ? "Zone updated" : "Zone added");
       queryClient.invalidateQueries({ queryKey: ["admin-zones"] });
+      setEditingZoneId(null);
+      setZoneForm(zoneDefaults);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -128,9 +135,25 @@ export default function ZonesPage() {
     onError: (err) => toast.error(err.message),
   });
 
+  const toggleZone = useMutation({
+    mutationFn: async (zone: Zone) =>
+      unwrap(
+        api.api.admin.zones[":id"].$patch({ param: { id: zone.id }, json: { isActive: !zone.isActive } }),
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-zones"] });
+      toast.success("Delivery coverage updated");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Zones & slots</h1>
+      <p className="text-sm text-muted">
+        Delivery is limited to Kottayam district. Enable only the pincodes you can serve; paused zones cannot
+        accept new orders.
+      </p>
 
       <Tabs defaultValue="zones">
         <TabsList>
@@ -140,16 +163,30 @@ export default function ZonesPage() {
         </TabsList>
 
         <TabsContent value="zones" className="space-y-4">
-          <Card className="grid gap-3 p-4 sm:grid-cols-6 sm:items-end">
-            <Field label="Pincode">
+          <Card id="delivery-zone-form" className="grid gap-3 p-4 sm:grid-cols-3 sm:items-end xl:grid-cols-7">
+            <Field
+              label="Pincode"
+              error={
+                zoneForm.pincode.length === 6 && !isKottayamPincode(zoneForm.pincode)
+                  ? "Enter a Kottayam district pincode"
+                  : undefined
+              }
+            >
               <Input
                 inputMode="numeric"
+                placeholder="686001"
+                list="kottayam-pincodes"
                 value={zoneForm.pincode}
                 onChange={(e) =>
                   setZoneForm({ ...zoneForm, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })
                 }
               />
             </Field>
+            <datalist id="kottayam-pincodes">
+              {KOTTAYAM_PINCODES.map((pincode) => (
+                <option key={pincode} value={pincode} />
+              ))}
+            </datalist>
             <Field label="Area (EN)">
               <Input
                 value={zoneForm.areaNameEn}
@@ -176,9 +213,40 @@ export default function ZonesPage() {
                 onChange={(e) => setZoneForm({ ...zoneForm, deliveryFee: e.target.value })}
               />
             </Field>
-            <Button onClick={() => createZone.mutate()} loading={createZone.isPending}>
-              <Plus className="h-4 w-4" aria-hidden /> Add zone
-            </Button>
+            <Field label="Free delivery above ₹" hint="Leave blank to always charge the delivery fee">
+              <Input
+                inputMode="decimal"
+                value={zoneForm.freeAbove}
+                onChange={(e) => setZoneForm({ ...zoneForm, freeAbove: e.target.value })}
+              />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => createZone.mutate()}
+                loading={createZone.isPending}
+                disabled={!isKottayamPincode(zoneForm.pincode)}
+              >
+                {editingZoneId ? (
+                  "Save zone"
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" aria-hidden /> Add zone
+                  </>
+                )}
+              </Button>
+              {editingZoneId ? (
+                <Button
+                  variant="outline"
+                  disabled={createZone.isPending}
+                  onClick={() => {
+                    setEditingZoneId(null);
+                    setZoneForm(zoneDefaults);
+                  }}
+                >
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
           </Card>
 
           <div className="overflow-x-auto rounded-card border border-line bg-white shadow-card">
@@ -191,6 +259,7 @@ export default function ZonesPage() {
                   <th>Fee</th>
                   <th>Free above</th>
                   <th>Status</th>
+                  <th>Coverage</th>
                 </tr>
               </thead>
               <tbody>
@@ -206,7 +275,49 @@ export default function ZonesPage() {
                     <td>{formatINR(z.deliveryFeePaise)}</td>
                     <td>{z.freeDeliveryThresholdPaise ? formatINR(z.freeDeliveryThresholdPaise) : "—"}</td>
                     <td>
-                      {z.isActive ? <Badge tone="green">Active</Badge> : <Badge tone="neutral">Paused</Badge>}
+                      {!isKottayamPincode(z.pincode) ? (
+                        <Badge tone="neutral">Outside district</Badge>
+                      ) : z.isActive ? (
+                        <Badge tone="green">Active</Badge>
+                      ) : (
+                        <Badge tone="neutral">Paused</Badge>
+                      )}
+                    </td>
+                    <td>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={createZone.isPending || !isKottayamPincode(z.pincode)}
+                        aria-label={`Edit delivery to ${z.pincode}`}
+                        onClick={() => {
+                          setEditingZoneId(z.id);
+                          setZoneForm({
+                            pincode: z.pincode,
+                            areaNameEn: z.areaNameEn,
+                            areaNameMl: z.areaNameMl,
+                            minOrder: String(z.minOrderPaise / 100),
+                            deliveryFee: String(z.deliveryFeePaise / 100),
+                            freeAbove:
+                              z.freeDeliveryThresholdPaise == null
+                                ? ""
+                                : String(z.freeDeliveryThresholdPaise / 100),
+                          });
+                          document
+                            .getElementById("delivery-zone-form")
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={toggleZone.isPending || !isKottayamPincode(z.pincode)}
+                        onClick={() => toggleZone.mutate(z)}
+                        aria-label={`${z.isActive ? "Pause" : "Enable"} delivery to ${z.pincode}`}
+                      >
+                        {z.isActive ? "Pause" : "Enable"}
+                      </Button>
                     </td>
                   </tr>
                 ))}

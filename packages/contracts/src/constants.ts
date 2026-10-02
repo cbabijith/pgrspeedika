@@ -2,6 +2,7 @@ export const LANGS = ["en", "ml"] as const;
 export type Lang = (typeof LANGS)[number];
 
 export const ORDER_STATUSES = [
+  "awaiting_confirmation",
   "pending_payment",
   "confirmed",
   "packed",
@@ -15,6 +16,7 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const ORDER_TIMELINE: OrderStatus[] = ["confirmed", "packed", "out_for_delivery", "delivered"];
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, { en: string; ml: string }> = {
+  awaiting_confirmation: { en: "Awaiting shop confirmation", ml: "കടയുടെ സ്ഥിരീകരണം കാത്തിരിക്കുന്നു" },
   pending_payment: { en: "Awaiting payment", ml: "പേയ്മെന്റ് കാത്തിരിക്കുന്നു" },
   confirmed: { en: "Order placed", ml: "ഓർഡർ സ്വീകരിച്ചു" },
   packed: { en: "Packed", ml: "പായ്ക്ക് ചെയ്തു" },
@@ -50,7 +52,7 @@ export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 
 /** Cancellation is allowed until the order is packed. */
 export function isCancellable(status: OrderStatus): boolean {
-  return status === "confirmed" || status === "pending_payment";
+  return status === "confirmed" || status === "pending_payment" || status === "awaiting_confirmation";
 }
 
 /** Ordered minutes-from-midnight → "7:00 AM". */

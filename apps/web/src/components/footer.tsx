@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { Logo } from "@pgrs/ui";
+import type { ShopSettings } from "@pgrs/contracts";
+import { serverFetch } from "@/lib/server-api";
 
-export function Footer() {
+export async function Footer() {
+  const shop = await serverFetch<Omit<ShopSettings, "gstin">>("/api/shop");
   return (
     <footer className="mt-16 border-t border-line bg-primary-700 text-primary-50">
       <div className="container-page grid gap-10 py-12 md:grid-cols-4">
@@ -10,8 +13,8 @@ export function Footer() {
             <Logo />
           </div>
           <p className="text-sm text-primary-100">
-            Fresh vegetables and groceries from our village shop, delivered to your kitchen across Kannur and
-            Kasaragod.
+            Fresh vegetables and groceries from our village shop, delivered to your kitchen in Kottayam
+            district.
           </p>
         </div>
         <nav aria-label="Shop" className="text-sm">
@@ -38,8 +41,8 @@ export function Footer() {
               </Link>
             </li>
             <li>
-              <Link href="/offers" className="hover:text-white">
-                Offers
+              <Link href="/category/groceries" className="hover:text-white">
+                Groceries
               </Link>
             </li>
           </ul>
@@ -83,16 +86,21 @@ export function Footer() {
               </Link>
             </li>
           </ul>
-          <p className="mt-4 text-xs text-primary-200">
-            Order by phone:{" "}
-            <a href="tel:+914901234567" className="underline">
-              +91 490 123 4567
-            </a>
-          </p>
+          {shop?.phone ? (
+            <p className="mt-4 text-xs text-primary-200">
+              Order by phone:{" "}
+              <a href={`tel:${shop.phone}`} className="underline">
+                {shop.phone}
+              </a>
+            </p>
+          ) : null}
         </nav>
       </div>
       <div className="border-t border-primary-600 py-4 text-center text-xs text-primary-200">
-        © {new Date().getFullYear()} PGRS Peedika · Fresh from our village to your kitchen
+        © {new Date().getFullYear()} PGRS Peedika · Fresh from our village to your kitchen ·{" "}
+        <Link href="/photo-credits" className="underline">
+          Photo credits
+        </Link>
       </div>
     </footer>
   );

@@ -4,8 +4,9 @@ import type { EventName, EventPayloadMap } from "@pgrs/events";
 import { formatINR } from "@pgrs/contracts";
 import { notifications, orders, settings, user } from "@pgrs/db";
 import type { AppContext } from "../lib/app-context";
-import { log } from "../lib/app-context";
 import { childLogger } from "../lib/logger";
+import { buildWhatsAppOrderMessage } from "../services/whatsapp-orders";
+import { getOrderDTO } from "../services/orders";
 import { allowsMessage, getNotificationPreferences } from "../services/notification-preferences";
 
 type Handler<K extends EventName> = (payload: EventPayloadMap[K], ctx: AppContext) => Promise<void>;
@@ -63,7 +64,7 @@ async function pushInApp(
   });
 }
 
-/** Best-effort outbound SMS/WhatsApp through the configured provider.
+/** Outbound SMS through the configured provider; failures trigger outbox retries.
  *  Customer sends pass through their notification preferences. */
 async function sendSms(
   ctx: AppContext,
@@ -82,7 +83,19 @@ async function sendSms(
     const prefs = await getNotificationPreferences(ctx.db, input.userId);
     if (!allowsMessage(prefs, input.kind, "sms")) return;
   }
-  try {
+  const sent = await ctx.db
+    .select()
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.channel, "sms"),
+        eq(notifications.eventName, eventName),
+        relatedId ? eq(notifications.relatedId, relatedId) : sql`false`,
+      ),
+    )
+    .limit(1);
+  if (sent.length) return;
+  {
     const result = await ctx.notifier.send({
       channel: "sms",
       to,
@@ -102,8 +115,6 @@ async function sendSms(
       relatedId: relatedId ?? null,
       sentAt: new Date(),
     });
-  } catch (err) {
-    log("worker").warn({ err: String(err), eventName }, "SMS delivery failed");
   }
 }
 
@@ -147,6 +158,58 @@ function render(template: string, vars: Record<string, string>): string {
 // ── Handlers (each must be idempotent: events may be redelivered) ────────────
 
 register(EVENTS.orderPlaced, async (payload, ctx) => {
+  const order = await getOrderDTO(ctx.db, payload.orderId);
+  const [shopRow] = await ctx.db.select().from(settings).where(eq(settings.key, "shop.profile"));
+  const phone = (shopRow?.value as { whatsapp?: string } | undefined)?.whatsapp;
+  if (phone) {
+    const [sent] = await ctx.db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.channel, "whatsapp"),
+          eq(notifications.eventName, EVENTS.orderPlaced),
+          eq(notifications.relatedId, order.id),
+        ),
+      )
+      .limit(1);
+    if (!sent) {
+      const body = buildWhatsAppOrderMessage({
+        awaitingConfirmation: order.status === "awaiting_confirmation",
+        orderNumber: order.orderNumber,
+        source: order.source,
+        paymentMethod: order.paymentMethod,
+        customer: { name: order.address.contactName, phone: order.address.contactPhone },
+        address: order.address,
+        slotLabel: order.slotLabelEn,
+        slotDate: order.slotDate,
+        items: order.items,
+        subtotalPaise: order.subtotalPaise,
+        deliveryFeePaise: order.deliveryFeePaise,
+        totalPaise: order.grandTotalPaise,
+        note: order.customerNote,
+      });
+      const result = await ctx.notifier.send({
+        channel: "whatsapp",
+        to: phone,
+        title: `New order ${order.orderNumber}`,
+        body,
+        eventName: EVENTS.orderPlaced,
+        relatedId: order.id,
+      });
+      await ctx.db.insert(notifications).values({
+        userId: null,
+        channel: "whatsapp",
+        eventName: EVENTS.orderPlaced,
+        title: `New order ${order.orderNumber}`,
+        body,
+        status: "sent",
+        relatedId: order.id,
+        providerMessageId: result.providerMessageId,
+        sentAt: new Date(),
+      });
+    }
+  }
   await bumpCounter(ctx, "ordersPlaced");
 
   const staff = await staffUserIds(ctx);

@@ -45,8 +45,18 @@ export function BannerCarousel({ banners, lang }: { banners: BannerItem[]; lang:
             fetchPriority="high"
             className="h-full w-full object-cover"
           />
+          {banner.imageUrl.includes("/catalog/photos/") ? (
+            <div className="absolute inset-0 flex flex-col justify-center bg-gradient-to-r from-primary-900/95 via-primary-800/75 to-transparent px-5 pr-16 text-white sm:px-12 sm:pr-40">
+              <h2 className="max-w-md text-lg font-extrabold leading-tight sm:text-3xl">
+                {lang === "en" ? banner.titleEn : banner.titleMl}
+              </h2>
+              <p className="mt-2 hidden max-w-md text-sm text-white/90 sm:block">
+                {lang === "en" ? banner.subtitleEn : banner.subtitleMl}
+              </p>
+            </div>
+          ) : null}
           {banner.badge ? (
-            <Badge tone="amber" className="absolute left-4 top-4 bg-white/95 text-sm">
+            <Badge tone="amber" className="absolute bottom-3 right-3 bg-white/95 text-sm">
               {banner.badge}
             </Badge>
           ) : null}

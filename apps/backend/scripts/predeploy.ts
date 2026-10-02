@@ -1,5 +1,5 @@
 import "../src/load-env";
-import { applyMigrations, getDb } from "@pgrs/db";
+import { applyMigrations, getDb, applyStorePresentation } from "@pgrs/db";
 import { seedAll } from "../src/seed";
 
 /**
@@ -28,6 +28,8 @@ async function main() {
     console.log("Seed complete — remove SEED_ON_DEPLOY before the next deploy to avoid reseeding.");
   }
 
+  console.log("Updating catalogue photos, categories and WhatsApp contact in place …");
+  await applyStorePresentation(getDb(), process.env.WEB_URL ?? "http://localhost:3000");
   process.exit(0);
 }
 
