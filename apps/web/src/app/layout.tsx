@@ -6,15 +6,16 @@ import { Footer } from "@/components/footer";
 import { CartDrawer } from "@/components/cart-drawer";
 import { MobileShoppingNav } from "@/components/mobile-shopping-nav";
 import { ServiceWorker } from "@/components/service-worker";
+import { SITE_URL } from "@/lib/site-url";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "PGRS Peedika · Fresh vegetables & groceries delivered in Kottayam district",
     template: "%s · PGRS Peedika",
   },
   description:
-    "Order farm-fresh vegetables, fruits, rice, spices and daily groceries from PGRS Peedika. Morning and evening delivery slots in Kottayam district. Fresh today, every day.",
+    "Choose vegetables, fruits and daily groceries from PGRS Peedika. Guest checkout on WhatsApp for Kottayam district, with delivery charges and timing confirmed by the shop.",
   applicationName: "PGRS Peedika",
   appleWebApp: { capable: true, title: "PGRS Peedika", statusBarStyle: "default" },
   icons: { apple: "/apple-touch-icon.png" },

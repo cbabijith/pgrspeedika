@@ -1,6 +1,9 @@
 import { config } from "dotenv";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { createDb, applyMigrations } from "@pgrs/db";
 import { seedAll } from "../src/seed";
 
@@ -16,6 +19,9 @@ testUrl.pathname = `/${name}`;
 const apiPort = process.env.E2E_API_PORT ?? "4100";
 const webPort = process.env.E2E_WEB_PORT ?? "3100";
 const adminPort = process.env.E2E_ADMIN_PORT ?? "3101";
+const nextDistDir = `.next-e2e-${process.pid}`;
+const nextTsconfig = `.tsconfig-e2e-${process.pid}.json`;
+const projectRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const env = {
   ...process.env,
   NODE_ENV: "development",
@@ -32,6 +38,8 @@ const env = {
   PORT: apiPort,
   WEB_PORT: webPort,
   ADMIN_PORT: adminPort,
+  PGRS_NEXT_DIST_DIR: nextDistDir,
+  PGRS_NEXT_TSCONFIG: nextTsconfig,
   ENABLE_TEST_OTP: "true",
   NOTIFY_PROVIDER: "console",
   LOG_LEVEL: "error",
@@ -53,7 +61,17 @@ for (const port of [apiPort, webPort, adminPort]) {
 }
 Object.assign(process.env, env);
 let db: ReturnType<typeof createDb> | null = null;
+const nextEnvFiles = new Map<string, Buffer>();
 try {
+  // Next adds generated route types to tsconfig; keep those changes in test-only copies.
+  await Promise.all(
+    ["web", "admin"].map(async (app) => {
+      const directory = join(projectRoot, "apps", app);
+      const nextEnv = join(directory, "next-env.d.ts");
+      nextEnvFiles.set(nextEnv, await readFile(nextEnv));
+      await writeFile(join(directory, nextTsconfig), await readFile(join(directory, "tsconfig.json")));
+    }),
+  );
   await control.$client.unsafe(`create database "${name}"`);
   db = createDb(testUrl.toString(), { max: 3 });
   await applyMigrations(testUrl.toString());
@@ -69,7 +87,14 @@ try {
   });
   process.exitCode = exitCode;
 } finally {
+  await Promise.all([...nextEnvFiles].map(([path, contents]) => writeFile(path, contents)));
   if (db) await db.$client.end();
   await control.$client.unsafe(`drop database if exists "${name}"`);
   await control.$client.end();
+  await Promise.all(
+    ["web", "admin"].flatMap((app) => [
+      rm(join(projectRoot, "apps", app, nextDistDir), { recursive: true, force: true }),
+      rm(join(projectRoot, "apps", app, nextTsconfig), { force: true }),
+    ]),
+  );
 }

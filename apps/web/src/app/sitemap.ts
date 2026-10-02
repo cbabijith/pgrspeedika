@@ -1,11 +1,12 @@
 import type { MetadataRoute } from "next";
 import { serverFetch } from "@/lib/server-api";
 import type { Category } from "@pgrs/contracts";
+import { SITE_URL } from "@/lib/site-url";
 
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const base = SITE_URL;
   const categories = (await serverFetch<Category[]>("/api/catalog/categories")) ?? [];
 
   const staticPages = [
@@ -13,7 +14,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/about",
     "/contact",
     "/faq",
-    "/offers",
+    "/shop",
+    "/photo-credits",
     "/privacy",
     "/refund-policy",
     "/terms",

@@ -239,7 +239,8 @@ icons; home-screen installation on a deployed site requires HTTPS.
   catalog/stock/price forms, mobile validation and interrupted-response retries,
   guest basket persistence, small-phone catalog paging/quantities/stock limits,
   desktop/mobile basket visibility and price-service failure recovery, plus mobile
-  owner category rename, pack pricing, stock and order confirmation/fulfilment.
+  owner category rename, pack pricing, stock and order confirmation/fulfilment,
+  plus same-origin owner sign-in, protected API access, reload and sign-out.
 - `pnpm e2e` — use a separately configured test database and seeded owner, with
   `ENABLE_TEST_OTP=true`. Do not run the browser fixtures against live store data.
 - `apps/web/scripts/lighthouse-mobile.sh` — Lighthouse **mobile** audit
@@ -253,11 +254,11 @@ icons; home-screen installation on a deployed site requires HTTPS.
   `railway.json` config-as-code (`apps/backend`, `apps/worker`, `apps/web`,
   `apps/admin`) — migrations run pre-deploy and the first deploy can seed the
   catalog + owner. Full step-by-step: **[docs/railway.md](docs/railway.md)**.
-- **Same-site cookies:** deploy web + admin + api under one registrable domain
-  (e.g. `pgrspeedika.com`, `admin.pgrspeedika.com`, `api.pgrspeedika.com`) so
-  the session cookie works with `sameSite=lax`; `useSecureCookies` turns on
-  automatically in production (Railway's `*.up.railway.app` domains already
-  satisfy this).
+- **Owner sessions:** the admin uses same-origin `/api` requests, forwarded to
+  `BACKEND_URL` or `NEXT_PUBLIC_API_URL` by its Next.js rewrite. This keeps the
+  HttpOnly session cookie on the admin site, so separate Railway domains and
+  browsers that block third-party cookies work without weakening SameSite settings.
+  Keep the admin origin in the backend's `CORS_ORIGINS` / trusted origins.
 - Set env vars from `.env.example` (validated with Zod at startup); generate
   `BETTER_AUTH_SECRET` with `openssl rand -base64 32`. Never commit real secrets.
 - Storage defaults to the local-disk driver; set `STORAGE_DRIVER=s3` plus the

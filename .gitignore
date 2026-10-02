@@ -5,6 +5,8 @@ node_modules/
 # build outputs
 dist/
 .next/
+.next-e2e*/
+.tsconfig-e2e*.json
 out/
 *.tsbuildinfo
 

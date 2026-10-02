@@ -6,15 +6,17 @@ test("basket bar appears immediately on phone and desktop; photos and grocery ca
 }) => {
   for (const width of [320, 1280]) {
     await page.setViewportSize({ width, height: 844 });
-    await page.goto("/shop");
+    await page.goto("/shop?sort=name_asc");
     await expect(page.getByRole("button", { name: "Login", exact: true })).toHaveCount(0);
     await expect(
       page
         .getByRole("navigation", { name: "Shop categories" })
         .getByRole("link", { name: "Groceries", exact: true }),
     ).toBeVisible();
-    const card = page.getByRole("article").first();
+    // Earlier flows create popular products without photos; use a known seeded photo.
+    const card = page.getByRole("article", { name: "Achappam (Rose Cookies)", exact: true });
     const photo = card.locator("img");
+    await photo.scrollIntoViewIfNeeded();
     await expect
       .poll(() => photo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
       .toBe(true);

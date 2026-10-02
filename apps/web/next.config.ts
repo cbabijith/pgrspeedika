@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   devIndicators: false,
+  distDir: process.env.PGRS_NEXT_DIST_DIR ?? ".next",
+  typescript: { tsconfigPath: process.env.PGRS_NEXT_TSCONFIG ?? "tsconfig.json" },
   images: {
     remotePatterns: [{ protocol: "https", hostname: "**" }],
   },

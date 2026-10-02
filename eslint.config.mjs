@@ -5,7 +5,7 @@ import { baseConfig } from "@pgrs/config/eslint";
 export default [
   ...baseConfig(),
   {
-    ignores: ["**/next-env.d.ts"],
+    ignores: ["**/next-env.d.ts", "**/.next-e2e*/**"],
   },
   {
     files: ["apps/web/public/sw.js"],
