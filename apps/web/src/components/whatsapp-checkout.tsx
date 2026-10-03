@@ -35,6 +35,8 @@ const defaults: Details = {
   city: "Kottayam",
   note: "",
 };
+const deliveryFields = ["name", "phone", "line1", "landmark", "pincode", "city"] as const;
+const detailsStorageKey = "pgrs-guest-details";
 
 /** Save a guest request, then open the shop's WhatsApp chat in this tab. */
 export function WhatsAppCheckout() {
@@ -46,10 +48,51 @@ export function WhatsAppCheckout() {
   const form = useForm<Details>({ resolver: zodResolver(detailsSchema), defaultValues: defaults });
   const [key, setKey] = useState("");
   const [placed, setPlaced] = useState<WhatsAppOrderResult | null>(null);
+  const [detailsStorage, setDetailsStorage] = useState<"empty" | "saved" | "unavailable">("empty");
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("pgrs-guest-details") ?? "null");
-      if (saved) form.reset({ ...defaults, ...saved, note: "" });
+      const raw = localStorage.getItem(detailsStorageKey);
+      if (raw) {
+        let saved: unknown;
+        try {
+          saved = JSON.parse(raw);
+        } catch {
+          localStorage.removeItem(detailsStorageKey);
+        }
+        if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+          const restored = { ...defaults };
+          for (const field of deliveryFields) {
+            const value = (saved as Record<string, unknown>)[field];
+            if (typeof value === "string") restored[field] = value;
+          }
+          form.reset(restored);
+        }
+      }
+    } catch {
+      setDetailsStorage("unavailable");
+    }
+    const saveDetails = () => {
+      // Save drafts too, but never reuse an instruction meant for just one order.
+      const values = form.getValues();
+      const details = Object.fromEntries(deliveryFields.map((field) => [field, values[field]]));
+      const hasDetails = deliveryFields.some((field) => values[field] !== defaults[field]);
+      try {
+        if (hasDetails) localStorage.setItem(detailsStorageKey, JSON.stringify(details));
+        else localStorage.removeItem(detailsStorageKey);
+        setDetailsStorage(hasDetails ? "saved" : "empty");
+      } catch {
+        setDetailsStorage("unavailable");
+      }
+    };
+    saveDetails();
+    // The small draft is saved immediately, including before reloads or WhatsApp navigation.
+    const subscription = form.watch((_values, { name }) => {
+      if (name !== "note") saveDetails();
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+  useEffect(() => {
+    try {
       let attempt = sessionStorage.getItem("pgrs-whatsapp-request-key");
       if (!attempt) {
         attempt = `request-${crypto.randomUUID()}`;
@@ -59,7 +102,7 @@ export function WhatsAppCheckout() {
     } catch {
       setKey(`request-${crypto.randomUUID()}`);
     }
-  }, [form]);
+  }, []);
   const send = useMutation({
     mutationFn: async (details: Details) => {
       const result = await unwrap<WhatsAppOrderResult>(
@@ -88,9 +131,13 @@ export function WhatsAppCheckout() {
             ].slice(0, 20),
           ),
         );
-        sessionStorage.removeItem("pgrs-whatsapp-request-key");
       } catch {
         /* The receipt remains on screen when browser storage is unavailable. */
+      }
+      try {
+        sessionStorage.removeItem("pgrs-whatsapp-request-key");
+      } catch {
+        /* A new key is generated on the next visit when session storage is unavailable. */
       }
       setPlaced(result);
       clear();
@@ -171,6 +218,36 @@ export function WhatsAppCheckout() {
               "ലോഗിനോ OTP-യോ വേണ്ട. കോട്ടയം ജില്ലയിലെ വിലാസം നൽകുക.",
             )}
           </p>
+        </div>
+        <div className="rounded-xl bg-primary-surface p-3 text-sm text-primary-700">
+          <p role="status" className="font-semibold">
+            {detailsStorage === "saved"
+              ? t("Details saved on this browser", "വിവരങ്ങൾ ഈ ബ്രൗസറിൽ സൂക്ഷിച്ചു")
+              : detailsStorage === "unavailable"
+                ? t("This browser couldn't save your details", "ഈ ബ്രൗസറിൽ വിവരങ്ങൾ സൂക്ഷിക്കാനായില്ല")
+                : t("Your details will be remembered", "നിങ്ങളുടെ വിവരങ്ങൾ ഓർത്തുവെക്കും")}
+          </p>
+          <p className="mt-1">
+            {detailsStorage === "unavailable"
+              ? t("You can still place your order as usual.", "നിങ്ങൾക്ക് പതിവുപോലെ ഓർഡർ നൽകാം.")
+              : t(
+                  "Next time, we'll fill in your name, phone and address on this device. You can edit them anytime.",
+                  "അടുത്ത തവണ ഈ ഉപകരണത്തിൽ പേരും ഫോണും വിലാസവും പൂരിപ്പിക്കും. എപ്പോൾ വേണമെങ്കിലും തിരുത്താം.",
+                )}
+          </p>
+          {detailsStorage === "saved" ? (
+            <button
+              type="button"
+              className="mt-1 min-h-11 font-semibold underline underline-offset-2"
+              onClick={() => {
+                for (const field of deliveryFields) form.setValue(field, defaults[field]);
+                form.clearErrors([...deliveryFields]);
+                form.setFocus("name");
+              }}
+            >
+              {t("Clear saved details", "സൂക്ഷിച്ച വിവരങ്ങൾ മായ്ക്കുക")}
+            </button>
+          ) : null}
         </div>
         <Card className="grid gap-3 p-4 sm:grid-cols-2">
           <Field label={t("Your name", "പേര്")} error={form.formState.errors.name?.message}>

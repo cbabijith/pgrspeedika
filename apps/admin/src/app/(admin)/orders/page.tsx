@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { KanbanSquare, Table2 } from "lucide-react";
+import { KanbanSquare, MessageCircle, Table2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -131,6 +131,39 @@ export default function OrdersPage() {
         </div>
       </header>
 
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Quick order filters">
+          <Button
+            variant={status === "" && source === "" ? "primary" : "outline"}
+            aria-pressed={status === "" && source === ""}
+            onClick={() => {
+              setStatus("");
+              setSource("");
+              setDate("");
+              setQ("");
+            }}
+          >
+            All orders
+          </Button>
+          <Button
+            variant={status === "awaiting_confirmation" ? "primary" : "outline"}
+            aria-pressed={status === "awaiting_confirmation"}
+            onClick={() => {
+              setStatus("awaiting_confirmation");
+              setSource("whatsapp");
+              setDate("");
+              setQ("");
+            }}
+          >
+            <MessageCircle className="h-4 w-4" aria-hidden /> WhatsApp requests
+          </Button>
+        </div>
+        <p className="text-sm text-muted">
+          Requests appear here as soon as the customer continues to WhatsApp. Open a request to review the
+          items and address, then agree delivery with the customer before confirming.
+        </p>
+      </div>
+
       <div className="space-y-3 md:hidden">
         {orders.isLoading ? (
           <p>Loading orders…</p>
@@ -153,7 +186,10 @@ export default function OrdersPage() {
                 />
               </div>
               <p className="text-sm text-muted">
-                {o.itemCount} items · {o.slotLabelEn} · {o.slotDate}
+                {o.itemCount} items ·{" "}
+                {o.status === "awaiting_confirmation"
+                  ? "Delivery to be agreed with customer"
+                  : `${o.slotLabelEn} · ${o.slotDate}`}
               </p>
               <div className="flex flex-wrap gap-2">
                 <StatusBadge status={o.status} />
